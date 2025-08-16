@@ -1,0 +1,13 @@
+{
+  "name": "pg-management",
+  "version": "1.0.0",
+  "description": "PG Management System",
+  "scripts": {
+    "build-css": "tailwindcss -i assets/css/tailwind.css -o assets/css/style.css --watch",
+    "build-prod": "tailwindcss -i assets/css/tailwind.css -o assets/css/style.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.0",
+    "@tailwindcss/forms": "^0.5.0"
+  }
+}

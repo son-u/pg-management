@@ -1,0 +1,14 @@
+
+node_modules/
+
+vendor/
+
+.vscode/
+.idea/
+
+.DS_Store
+
+/dist
+.env
+
+progress.txt

@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Components */
+@layer components {
+  .btn-primary {
+    @apply bg-pg-accent hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+
+  .btn-secondary {
+    @apply bg-pg-card hover:bg-pg-hover text-pg-text-primary border border-pg-border font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-status-danger hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+
+  .card {
+    @apply bg-pg-card border border-pg-border rounded-lg p-6 shadow-sm;
+  }
+
+  .input-field {
+    @apply bg-pg-secondary border border-pg-border text-pg-text-primary rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pg-accent focus:border-transparent;
+  }
+
+  .select-field {
+    @apply bg-pg-secondary border border-pg-border text-pg-text-primary rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pg-accent focus:border-transparent;
+  }
+
+  .table-header {
+    @apply bg-pg-secondary text-pg-text-primary font-semibold py-3 px-4 text-left;
+  }
+
+  .table-cell {
+    @apply bg-pg-card text-pg-text-primary py-3 px-4 border-b border-pg-border;
+  }
+
+  .revenue-card {
+    @apply bg-gradient-to-r from-pg-card to-pg-secondary border border-pg-border rounded-lg p-6 shadow-lg hover:shadow-xl transition-shadow duration-300;
+  }
+
+  .building-card {
+    @apply bg-pg-card border border-pg-border rounded-lg p-4 hover:border-pg-accent transition-colors duration-200;
+  }
+
+  .status-badge {
+    @apply px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .status-active {
+    @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+  }
+
+  .status-inactive {
+    @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+  }
+
+  .status-pending {
+    @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
+  }
+}
+
+/* Custom Base Styles */
+@layer base {
+  body {
+    @apply bg-pg-primary text-pg-text-primary font-sans;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply text-pg-text-primary;
+  }
+
+  a {
+    @apply text-pg-accent hover:text-green-400 transition-colors duration-200;
+  }
+
+  /* Scrollbar Styling */
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-pg-secondary;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-pg-border rounded-full hover:bg-pg-hover;
+  }
+}
+
+/* Utility Classes */
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-pg-accent to-green-400 bg-clip-text text-transparent;
+  }
+
+  .border-gradient {
+    background: linear-gradient(to right, #3ecf8e, #22c55e);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+  }
+}
