@@ -19,6 +19,16 @@ $totalStudents = 0;
 $totalPages = 0;
 $error = null;
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Students index buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
 try {
     $supabase = supabase();
 
@@ -92,7 +102,7 @@ $queryParams = [
                 <?php if ($selectedBuilding === 'all'): ?>
                     Manage students across all buildings
                 <?php else: ?>
-                    Manage students in <?php echo BUILDING_NAMES[$selectedBuilding]; ?>
+                    Manage students in <?php echo htmlspecialchars($buildingNames[$selectedBuilding] ?? $selectedBuilding); ?>
                 <?php endif; ?>
             </p>
         </div>
@@ -142,11 +152,15 @@ $queryParams = [
                     <label for="building" class="block text-sm font-medium text-pg-text-primary mb-2">Building</label>
                     <select id="building" name="building" class="select-field w-full">
                         <option value="all" <?php echo $selectedBuilding === 'all' ? 'selected' : ''; ?>>All Buildings</option>
-                        <?php foreach (BUILDINGS as $code): ?>
-                            <option value="<?php echo $code; ?>" <?php echo $selectedBuilding === $code ? 'selected' : ''; ?>>
-                                <?php echo BUILDING_NAMES[$code]; ?>
-                            </option>
-                        <?php endforeach; ?>
+                        <?php if (!empty($buildingNames)): ?>
+                            <?php foreach ($buildingNames as $code => $name): ?>
+                                <option value="<?php echo htmlspecialchars($code); ?>" <?php echo $selectedBuilding === $code ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($name); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="" disabled>No buildings available</option>
+                        <?php endif; ?>
                     </select>
                 </div>
 
@@ -252,7 +266,7 @@ $queryParams = [
                                 </td>
                                 <td class="px-6 py-4">
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-pg-accent bg-opacity-20 text-pg-accent">
-                                        <?php echo BUILDING_NAMES[$student['building_code']] ?? $student['building_code']; ?>
+                                        <?php echo htmlspecialchars($buildingNames[$student['building_code']] ?? $student['building_code']); ?>
                                     </span>
                                 </td>
                                 <td class="hidden sm:table-cell px-6 py-4"><?php echo htmlspecialchars($student['room_number'] ?? '-'); ?></td>

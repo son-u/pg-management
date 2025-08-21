@@ -15,6 +15,10 @@ $preSelectedStudent = $_GET['student_id'] ?? '';
 try {
     $supabase = supabase();
 
+    // Get buildings data using the new Buildings class
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+
     // Get students list
     $students = $supabase->select('students', 'student_id,full_name,building_code,monthly_rent', []);
     usort($students, function ($a, $b) {
@@ -39,9 +43,10 @@ try {
 } catch (Exception $e) {
     $error = 'Error loading initial data: ' . $e->getMessage();
     $students = [];
+    $buildingCodes = [];
+    $buildingNames = [];
     $generatedPaymentId = 'PAY000001';
 }
-
 
 // Initialize form data
 $formData = [
@@ -281,12 +286,16 @@ function generateMonthYearOptions($startMonths = 12, $futureMonths = 6)
                         </label>
                         <select id="building_code" name="building_code" class="select-field w-full" required>
                             <option value="">Select Building</option>
-                            <?php foreach (BUILDINGS as $code): ?>
-                                <option value="<?php echo $code; ?>"
-                                    <?php echo $formData['building_code'] === $code ? 'selected' : ''; ?>>
-                                    <?php echo BUILDING_NAMES[$code]; ?>
-                                </option>
-                            <?php endforeach; ?>
+                            <?php if (!empty($buildingNames)): ?>
+                                <?php foreach ($buildingNames as $code => $name): ?>
+                                    <option value="<?php echo htmlspecialchars($code); ?>"
+                                        <?php echo $formData['building_code'] === $code ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($name); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="" disabled>No buildings available</option>
+                            <?php endif; ?>
                         </select>
                         <p class="text-xs text-pg-text-secondary mt-1">Auto-filled when student is selected</p>
                     </div>

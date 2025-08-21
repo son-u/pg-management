@@ -41,16 +41,8 @@ try {
         $success = $_GET['success'];
     }
 
-    // Fetch buildings with explicit ordering and error handling
+    // Fetch buildings
     $buildingsRaw = $supabase->select('buildings', '*', []);
-
-    // Debug: Log what we got from database
-    error_log('Buildings fetched from DB: ' . count($buildingsRaw ?? []));
-    if (!empty($buildingsRaw)) {
-        error_log('First building: ' . json_encode($buildingsRaw[0]));
-    }
-
-    // Clean and deduplicate buildings array
     $buildings = [];
     $seenCodes = [];
 
@@ -58,24 +50,22 @@ try {
         foreach ($buildingsRaw as $building) {
             $code = $building['building_code'] ?? '';
 
-            // Skip if we've already seen this building_code
+            // Skip duplicates
             if (in_array($code, $seenCodes)) {
-                error_log('Duplicate building_code found: ' . $code);
                 continue;
             }
 
-            // Add to seen codes and buildings array
             $seenCodes[] = $code;
             $buildings[] = $building;
         }
 
-        // Sort buildings by building_code for consistent display
+        // Sort buildings by building_code
         usort($buildings, function ($a, $b) {
             return strcmp($a['building_code'] ?? '', $b['building_code'] ?? '');
         });
     }
 
-    // Fetch rooms for statistics calculation
+    // Fetch rooms for statistics
     $allRooms = $supabase->select('rooms', '*', []);
     $allRooms = is_array($allRooms) ? $allRooms : [];
 
@@ -83,12 +73,10 @@ try {
     foreach ($buildings as &$building) {
         $buildingCode = $building['building_code'] ?? '';
 
-        // Filter rooms for this building
         $buildingRooms = array_filter($allRooms, function ($room) use ($buildingCode) {
             return ($room['building_code'] ?? '') === $buildingCode;
         });
 
-        // Calculate statistics
         $building['actual_total_rooms'] = count($buildingRooms);
         $building['actual_occupied_rooms'] = count(array_filter($buildingRooms, function ($room) {
             return ($room['status'] ?? '') === 'occupied';
@@ -100,7 +88,7 @@ try {
             return intval($room['current_occupancy'] ?? 0);
         }, $buildingRooms));
     }
-    unset($building); // Clean up reference
+    unset($building);
 
 } catch (Exception $e) {
     $error = 'Error: ' . $e->getMessage();
@@ -111,7 +99,6 @@ try {
 
 <?php include '../../includes/header.php'; ?>
 
-<!-- Building Management Interface -->
 <div class="space-y-6">
     <!-- Page Header -->
     <div class="flex items-center justify-between">
@@ -127,42 +114,7 @@ try {
                 <p class="text-pg-text-secondary mt-1">Configure building information and settings</p>
             </div>
         </div>
-
-        <!-- Debug Toggle -->
-        <div class="flex items-center space-x-2">
-            <?php if (!isset($_GET['debug'])): ?>
-                <a href="?debug=1" class="text-xs bg-gray-600 text-white px-2 py-1 rounded">Debug</a>
-            <?php else: ?>
-                <a href="buildings.php" class="text-xs bg-gray-600 text-white px-2 py-1 rounded">Hide Debug</a>
-            <?php endif; ?>
-        </div>
     </div>
-
-    <!-- Debug Information -->
-    <?php if (isset($_GET['debug'])): ?>
-        <div class="card bg-gray-900 text-green-400">
-            <h3 class="text-lg font-semibold mb-4">🐛 Debug Information</h3>
-            <div class="space-y-2 text-sm font-mono">
-                <div><strong>Total Buildings Found:</strong> <?php echo count($buildings); ?></div>
-                <div><strong>Building Codes:</strong>
-                    <?php
-                    $codes = array_map(function ($b) {
-                        return $b['building_code'];
-                    }, $buildings);
-                    echo implode(', ', $codes);
-                    ?>
-                </div>
-                <div><strong>Current Time:</strong> <?php echo date('Y-m-d H:i:s'); ?></div>
-
-                <?php if (!empty($buildings)): ?>
-                    <div class="mt-4">
-                        <strong>Buildings Data:</strong>
-                        <pre class="mt-2 text-xs overflow-auto max-h-64"><?php print_r($buildings); ?></pre>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    <?php endif; ?>
 
     <!-- Messages -->
     <?php if ($error): ?>
@@ -171,7 +123,7 @@ try {
                 <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
                 </svg>
-                <?php echo safe_html($error); ?>
+                <?php echo htmlspecialchars($error); ?>
             </div>
         </div>
     <?php endif; ?>
@@ -182,7 +134,7 @@ try {
                 <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                 </svg>
-                <?php echo safe_html($success); ?>
+                <?php echo htmlspecialchars($success); ?>
             </div>
         </div>
     <?php endif; ?>
@@ -197,20 +149,17 @@ try {
             <p class="text-pg-text-secondary">Check your database connection or add buildings to your database</p>
         </div>
     <?php else: ?>
-        <?php foreach ($buildings as $index => $building): ?>
+        <?php foreach ($buildings as $building): ?>
             <div class="card">
                 <div class="flex items-center justify-between mb-4 pb-2 border-b border-pg-border">
                     <h3 class="text-lg font-semibold text-pg-text-primary">
-                        <?php echo safe_html($building['building_name']); ?>
+                        <?php echo htmlspecialchars($building['building_name']); ?>
                         <span class="text-sm font-normal text-pg-text-secondary ml-2">
-                            (<?php echo safe_html($building['building_code']); ?>)
+                            (<?php echo htmlspecialchars($building['building_code']); ?>)
                         </span>
-                        <?php if (isset($_GET['debug'])): ?>
-                            <span class="text-xs bg-gray-600 text-white px-1 py-0.5 rounded ml-2">ID: <?php echo $building['id']; ?></span>
-                        <?php endif; ?>
                     </h3>
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-opacity-20 <?php echo ($building['status'] ?? 'active') === 'active' ? 'bg-green-500 text-green-400' : 'bg-red-500 text-red-400'; ?>">
-                        <?php echo safe_html(ucfirst($building['status'] ?? 'active')); ?>
+                        <?php echo htmlspecialchars(ucfirst($building['status'] ?? 'active')); ?>
                     </span>
                 </div>
 
@@ -231,7 +180,7 @@ try {
                                     name="building_name"
                                     class="input-field w-full"
                                     required
-                                    value="<?php echo safe_html($building['building_name']); ?>">
+                                    value="<?php echo htmlspecialchars($building['building_name']); ?>">
                             </div>
 
                             <div>
@@ -241,7 +190,7 @@ try {
                                 <textarea name="building_address"
                                     rows="3"
                                     class="input-field w-full resize-none"
-                                    placeholder="Building address"><?php echo safe_html($building['building_address']); ?></textarea>
+                                    placeholder="Building address"><?php echo htmlspecialchars($building['building_address']); ?></textarea>
                             </div>
 
                             <div>
@@ -268,7 +217,7 @@ try {
                                     name="contact_person"
                                     class="input-field w-full"
                                     placeholder="Building Manager Name"
-                                    value="<?php echo safe_html($building['contact_person']); ?>">
+                                    value="<?php echo htmlspecialchars($building['contact_person']); ?>">
                             </div>
 
                             <div>
@@ -279,7 +228,7 @@ try {
                                     name="contact_phone"
                                     class="input-field w-full"
                                     placeholder="+91 9876543210"
-                                    value="<?php echo safe_html($building['contact_phone']); ?>">
+                                    value="<?php echo htmlspecialchars($building['contact_phone']); ?>">
                             </div>
 
                             <!-- Statistics -->

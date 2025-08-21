@@ -19,6 +19,16 @@ $payment = null;
 $error = '';
 $formData = [];
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Payment edit buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
 try {
     $supabase = supabase();
     
@@ -271,12 +281,16 @@ function formatDateForInput($date) {
                         </label>
                         <select id="building_code" name="building_code" class="select-field w-full" required>
                             <option value="">Select Building</option>
-                            <?php foreach (BUILDINGS as $code): ?>
-                                <option value="<?php echo $code; ?>" 
-                                        <?php echo $formData['building_code'] === $code ? 'selected' : ''; ?>>
-                                    <?php echo BUILDING_NAMES[$code]; ?>
-                                </option>
-                            <?php endforeach; ?>
+                            <?php if (!empty($buildingNames)): ?>
+                                <?php foreach ($buildingNames as $code => $name): ?>
+                                    <option value="<?php echo htmlspecialchars($code); ?>" 
+                                            <?php echo $formData['building_code'] === $code ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($name); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="" disabled>No buildings available</option>
+                            <?php endif; ?>
                         </select>
                     </div>
                 </div>

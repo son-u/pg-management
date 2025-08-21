@@ -1,4 +1,4 @@
-// ⭐ AUTO-REFRESH SESSION MANAGER - Updated to 30 minutes
+// AUTO-REFRESH SESSION MANAGER - Updated to 30 minutes
 class SessionManager {
   constructor() {
     this.refreshInterval = 30 * 60 * 1000; // 30 minutes
@@ -79,7 +79,7 @@ class SessionManager {
   }
 }
 
-// ⭐ AUTO-START SESSION MANAGER
+//  AUTO-START SESSION MANAGER
 document.addEventListener("DOMContentLoaded", function () {
   window.sessionManager = new SessionManager();
 });

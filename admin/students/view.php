@@ -21,6 +21,14 @@ if (empty($studentId)) {
 $student = null;
 $error = '';
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Student view buildings error: ' . $e->getMessage());
+    $buildingNames = [];
+}
+
 try {
     $supabase = supabase();
 
@@ -143,7 +151,7 @@ function calculateAge($dateOfBirth)
                     <div class="grid grid-cols-2 gap-4 text-center">
                         <div class="bg-pg-primary bg-opacity-50 rounded-lg p-3">
                             <div class="text-lg font-bold text-pg-accent">
-                                <?php echo BUILDING_NAMES[$student['building_code']] ?? $student['building_code']; ?>
+                                <?php echo htmlspecialchars($buildingNames[$student['building_code']] ?? $student['building_code']); ?>
                             </div>
                             <div class="text-xs text-pg-text-secondary">Building</div>
                         </div>
@@ -286,7 +294,7 @@ function calculateAge($dateOfBirth)
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-pg-text-secondary mb-1">Building</label>
-                            <p class="text-pg-text-primary"><?php echo BUILDING_NAMES[$student['building_code']] ?? $student['building_code']; ?></p>
+                            <p class="text-pg-text-primary"><?php echo htmlspecialchars($buildingNames[$student['building_code']] ?? $student['building_code']); ?></p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-pg-text-secondary mb-1">Room Number</label>

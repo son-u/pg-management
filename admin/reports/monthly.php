@@ -9,23 +9,33 @@ require_once '../../includes/auth_check.php';
 $error = '';
 $selectedMonthYear = $_GET['month_year'] ?? date('Y-m');
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Monthly report buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
 try {
     $supabase = supabase();
-    
+
     // Get all payments for analysis
     $allPayments = $supabase->select('payments', '*', []);
-    
+
     // Filter payments for selected month
-    $monthlyPayments = array_filter($allPayments, function($payment) use ($selectedMonthYear) {
+    $monthlyPayments = array_filter($allPayments, function ($payment) use ($selectedMonthYear) {
         return ($payment['month_year'] ?? '') === $selectedMonthYear;
     });
-    
+
     // Get available months for dropdown
-    $availableMonths = array_unique(array_map(function($p) {
+    $availableMonths = array_unique(array_map(function ($p) {
         return $p['month_year'];
     }, $allPayments));
     rsort($availableMonths);
-    
+
     // Calculate monthly metrics
     $metrics = [
         'total_payments' => count($monthlyPayments),
@@ -35,37 +45,37 @@ try {
         'total_late_fees' => 0,
         'collection_rate' => 0
     ];
-    
+
     $statusBreakdown = ['paid' => 0, 'pending' => 0, 'partial' => 0, 'overdue' => 0];
     $methodBreakdown = ['cash' => 0, 'upi' => 0, 'bank_transfer' => 0, 'cheque' => 0];
     $buildingBreakdown = [];
-    
+
     foreach ($monthlyPayments as $payment) {
         $due = floatval($payment['amount_due'] ?? 0);
         $paid = floatval($payment['amount_paid'] ?? 0);
         $lateFee = floatval($payment['late_fee'] ?? 0);
         $balance = ($due + $lateFee) - $paid;
-        
+
         $metrics['total_collected'] += $paid;
         $metrics['total_due'] += $due;
         $metrics['total_late_fees'] += $lateFee;
-        
+
         if ($balance > 0) {
             $metrics['total_pending'] += $balance;
         }
-        
+
         // Status breakdown
         $status = strtolower($payment['payment_status'] ?? 'paid');
         if (isset($statusBreakdown[$status])) {
             $statusBreakdown[$status]++;
         }
-        
+
         // Payment method breakdown
         $method = strtolower($payment['payment_method'] ?? 'cash');
         if (isset($methodBreakdown[$method])) {
             $methodBreakdown[$method]++;
         }
-        
+
         // Building breakdown
         $building = $payment['building_code'] ?? 'unknown';
         if (!isset($buildingBreakdown[$building])) {
@@ -81,29 +91,28 @@ try {
             $buildingBreakdown[$building]['pending'] += $balance;
         }
     }
-    
+
     // Calculate collection rate
     $totalExpected = $metrics['total_due'] + $metrics['total_late_fees'];
-    $metrics['collection_rate'] = $totalExpected > 0 ? 
+    $metrics['collection_rate'] = $totalExpected > 0 ?
         round(($metrics['total_collected'] / $totalExpected) * 100, 1) : 100;
-    
+
     // Get previous month for comparison
     $previousMonth = date('Y-m', strtotime($selectedMonthYear . '-01 -1 month'));
-    $previousMonthPayments = array_filter($allPayments, function($payment) use ($previousMonth) {
+    $previousMonthPayments = array_filter($allPayments, function ($payment) use ($previousMonth) {
         return ($payment['month_year'] ?? '') === $previousMonth;
     });
-    
-    $previousMonthCollected = array_sum(array_map(function($p) {
+
+    $previousMonthCollected = array_sum(array_map(function ($p) {
         return floatval($p['amount_paid'] ?? 0);
     }, $previousMonthPayments));
-    
-    $growth = $previousMonthCollected > 0 ? 
-        round((($metrics['total_collected'] - $previousMonthCollected) / $previousMonthCollected) * 100, 1) : 0;
 
+    $growth = $previousMonthCollected > 0 ?
+        round((($metrics['total_collected'] - $previousMonthCollected) / $previousMonthCollected) * 100, 1) : 0;
 } catch (Exception $e) {
     $error = 'Error loading monthly report: ' . $e->getMessage();
     error_log('Monthly report error: ' . $e->getMessage());
-    
+
     // Default values
     $monthlyPayments = [];
     $availableMonths = [];
@@ -122,16 +131,19 @@ try {
 }
 
 // Helper functions
-function formatCurrency($amount) {
+function formatCurrency($amount)
+{
     return '₹' . number_format(floatval($amount), 2);
 }
 
-function formatDate($date) {
+function formatDate($date)
+{
     if (empty($date)) return '-';
     return date('M d, Y', strtotime($date));
 }
 
-function getStatusBadge($status) {
+function getStatusBadge($status)
+{
     $badges = [
         'paid' => 'status-badge status-active',
         'pending' => 'status-badge bg-yellow-500 bg-opacity-20 text-yellow-400',
@@ -155,7 +167,7 @@ function getStatusBadge($status) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
             </a>
-            
+
             <div>
                 <h1 class="text-2xl font-bold text-pg-text-primary">Monthly Payment Report</h1>
                 <p class="text-pg-text-secondary mt-1">
@@ -163,7 +175,7 @@ function getStatusBadge($status) {
                 </p>
             </div>
         </div>
-        
+
         <div class="flex items-center space-x-3">
             <a href="export.php?type=monthly&month=<?php echo urlencode($selectedMonthYear); ?>" class="btn-secondary">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -195,8 +207,8 @@ function getStatusBadge($status) {
                 </label>
                 <select id="month_year" name="month_year" class="select-field w-full" onchange="this.form.submit()">
                     <?php foreach ($availableMonths as $month): ?>
-                        <option value="<?php echo htmlspecialchars($month); ?>" 
-                                <?php echo $selectedMonthYear === $month ? 'selected' : ''; ?>>
+                        <option value="<?php echo htmlspecialchars($month); ?>"
+                            <?php echo $selectedMonthYear === $month ? 'selected' : ''; ?>>
                             <?php echo date('F Y', strtotime($month . '-01')); ?>
                         </option>
                     <?php endforeach; ?>
@@ -259,7 +271,7 @@ function getStatusBadge($status) {
             <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                 Payment Status Breakdown
             </h3>
-            
+
             <div class="space-y-3">
                 <?php foreach ($statusBreakdown as $status => $count): ?>
                     <div class="flex items-center justify-between p-3 bg-pg-primary bg-opacity-50 rounded-lg">
@@ -281,7 +293,7 @@ function getStatusBadge($status) {
             <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                 Payment Methods
             </h3>
-            
+
             <div class="space-y-3">
                 <?php foreach ($methodBreakdown as $method => $count): ?>
                     <?php if ($count > 0): ?>
@@ -308,7 +320,7 @@ function getStatusBadge($status) {
             <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                 Building-wise Performance
             </h3>
-            
+
             <div class="overflow-x-auto">
                 <table class="min-w-full">
                     <thead>
@@ -325,7 +337,7 @@ function getStatusBadge($status) {
                             <tr class="border-b border-pg-border hover:bg-pg-hover transition-colors duration-200">
                                 <td class="px-6 py-4">
                                     <div class="font-medium text-pg-text-primary">
-                                        <?php echo BUILDING_NAMES[$buildingCode] ?? $buildingCode; ?>
+                                        <?php echo htmlspecialchars($buildingNames[$buildingCode] ?? $buildingCode); ?>
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 text-center">
@@ -340,7 +352,7 @@ function getStatusBadge($status) {
                                     <?php echo formatCurrency($data['pending']); ?>
                                 </td>
                                 <td class="px-6 py-4 text-center">
-                                    <?php 
+                                    <?php
                                     $buildingTotal = $data['collected'] + $data['pending'];
                                     $buildingRate = $buildingTotal > 0 ? round(($data['collected'] / $buildingTotal) * 100, 1) : 100;
                                     ?>
@@ -361,7 +373,7 @@ function getStatusBadge($status) {
         <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
             All Payments - <?php echo date('F Y', strtotime($selectedMonthYear . '-01')); ?>
         </h3>
-        
+
         <div class="overflow-x-auto">
             <table class="min-w-full">
                 <thead>
@@ -401,7 +413,7 @@ function getStatusBadge($status) {
                                     </div>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <?php echo BUILDING_NAMES[$payment['building_code']] ?? $payment['building_code']; ?>
+                                    <?php echo htmlspecialchars($buildingNames[$payment['building_code']] ?? $payment['building_code']); ?>
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="font-semibold text-pg-accent">
@@ -428,18 +440,18 @@ function getStatusBadge($status) {
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <div class="flex items-center justify-center space-x-1">
-                                        <a href="../payments/view.php?id=<?php echo urlencode($payment['payment_id']); ?>" 
-                                           class="text-blue-400 hover:text-blue-300 transition-colors duration-200 p-1" 
-                                           title="View Payment">
+                                        <a href="../payments/view.php?id=<?php echo urlencode($payment['payment_id']); ?>"
+                                            class="text-blue-400 hover:text-blue-300 transition-colors duration-200 p-1"
+                                            title="View Payment">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                                             </svg>
                                         </a>
-                                        <a href="../payments/receipt.php?id=<?php echo urlencode($payment['payment_id']); ?>" 
-                                           class="text-green-400 hover:text-green-300 transition-colors duration-200 p-1" 
-                                           title="Print Receipt"
-                                           target="_blank">
+                                        <a href="../payments/receipt.php?id=<?php echo urlencode($payment['payment_id']); ?>"
+                                            class="text-green-400 hover:text-green-300 transition-colors duration-200 p-1"
+                                            title="Print Receipt"
+                                            target="_blank">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
                                             </svg>

@@ -136,16 +136,13 @@ function formatDateForInput($date) {
     }
 }
 
-// ✅ ADDED: Fetch available buildings from database
+// ✅ UPDATED: Fetch available buildings using Buildings class
 $availableBuildings = [];
 try {
-    $supabase = supabase();
-    $buildings = $supabase->select('buildings', 'building_code,building_name', [
-        'status' => 'active'
-    ]);
-    $availableBuildings = $buildings ?: [];
+    $availableBuildings = Buildings::getAll();
 } catch (Exception $e) {
-    error_log('Error loading buildings: ' . $e->getMessage());
+    error_log('Student edit buildings error: ' . $e->getMessage());
+    $availableBuildings = [];
 }
 ?>
 
@@ -339,19 +336,23 @@ try {
                 </h3>
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <!-- Building (Dynamic from Database) -->
+                    <!-- Building (Dynamic using Buildings class) -->
                     <div>
                         <label for="building_code" class="block text-sm font-medium text-pg-text-primary mb-2">
                             Building <span class="text-status-danger">*</span>
                         </label>
                         <select id="building_code" name="building_code" class="select-field w-full" onchange="loadRooms(this.value)" required>
                             <option value="">Select Building</option>
-                            <?php foreach ($availableBuildings as $building): ?>
-                                <option value="<?php echo htmlspecialchars($building['building_code']); ?>" 
-                                        <?php echo ($formData['building_code'] ?? '') === $building['building_code'] ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($building['building_name']); ?> (<?php echo htmlspecialchars($building['building_code']); ?>)
-                                </option>
-                            <?php endforeach; ?>
+                            <?php if (!empty($availableBuildings)): ?>
+                                <?php foreach ($availableBuildings as $building): ?>
+                                    <option value="<?php echo htmlspecialchars($building['building_code']); ?>" 
+                                            <?php echo ($formData['building_code'] ?? '') === $building['building_code'] ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($building['building_name']); ?> (<?php echo htmlspecialchars($building['building_code']); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="" disabled>No buildings available</option>
+                            <?php endif; ?>
                         </select>
                     </div>
 

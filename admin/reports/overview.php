@@ -9,6 +9,16 @@ require_once '../../includes/auth_check.php';
 $error = '';
 $metrics = [];
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Reports overview buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
 try {
     $supabase = supabase();
 
@@ -24,7 +34,7 @@ try {
         'active_students' => count(array_filter($students, function($s) { 
             return ($s['status'] ?? 'active') === 'active'; 
         })),
-        'total_buildings' => count(BUILDINGS),
+        'total_buildings' => count($buildingCodes),
         'total_payments' => count($payments),
         'total_collected' => array_sum(array_map(function($p) { 
             return floatval($p['amount_paid'] ?? 0); 
@@ -60,7 +70,7 @@ try {
 
     // Building-wise breakdown
     $buildingData = [];
-    foreach (BUILDINGS as $buildingCode) {
+    foreach ($buildingCodes as $buildingCode) {
         $buildingStudents = array_filter($students, function($s) use ($buildingCode) {
             return ($s['building_code'] ?? '') === $buildingCode && ($s['status'] ?? 'active') === 'active';
         });
@@ -74,7 +84,7 @@ try {
         }, $buildingPayments));
 
         $buildingData[$buildingCode] = [
-            'name' => BUILDING_NAMES[$buildingCode],
+            'name' => $buildingNames[$buildingCode] ?? $buildingCode,
             'students' => count($buildingStudents),
             'revenue' => $buildingRevenue,
             'payments' => count($buildingPayments)

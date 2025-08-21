@@ -3,6 +3,16 @@ $title = 'Dashboard';
 require_once '../includes/header.php';
 require_once '../config/database.php';
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Dashboard buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
 // Get current month for data
 $currentMonth = date('Y-m');
 $previousMonth = date('Y-m', strtotime('-1 month'));
@@ -18,9 +28,22 @@ $recentPayments = [];
 $monthlyGrowth = 0;
 $systemStatus = 'operational';
 $lastUpdated = date('M j, Y g:i A');
+$totalCapacity = 0;
+$totalOccupied = 0;
 
 try {
     $supabase = supabase();
+
+    // ✅ NEW: Get actual room capacity data from database
+    $allRoomsData = $supabase->select('rooms', 'building_code,capacity,current_occupancy,status', []);
+    
+    // Calculate total capacity and occupancy from actual room data
+    foreach ($allRoomsData as $room) {
+        if ($selectedBuilding === 'all' || $room['building_code'] === $selectedBuilding) {
+            $totalCapacity += intval($room['capacity']);
+            $totalOccupied += intval($room['current_occupancy']);
+        }
+    }
 
     // Get active students count
     $studentsFilter = ['status' => 'active'];
@@ -31,8 +54,13 @@ try {
     $students = $supabase->select('students', 'id,student_id,full_name,building_code,created_at', $studentsFilter);
     $totalStudents = count($students);
 
-    // Get recent students (last 5)
-    $allStudents = $supabase->select('students', 'student_id,full_name,building_code,created_at', ['status' => 'active']);
+    // ✅ FIXED: Get recent students with building filter
+    $studentsFilterForRecent = ['status' => 'active'];
+    if ($selectedBuilding !== 'all') {
+        $studentsFilterForRecent['building_code'] = $selectedBuilding;
+    }
+
+    $allStudents = $supabase->select('students', 'student_id,full_name,building_code,created_at', $studentsFilterForRecent);
     usort($allStudents, function ($a, $b) {
         return strtotime($b['created_at']) - strtotime($a['created_at']);
     });
@@ -47,12 +75,44 @@ try {
     $payments = $supabase->select('payments', 'amount_paid,student_id,created_at', $paymentsFilter);
     $totalRevenue = array_sum(array_column($payments, 'amount_paid'));
 
-    // Get recent payments (last 5)
-    $allPayments = $supabase->select('payments', 'payment_id,amount_paid,student_id,building_code,created_at', []);
-    usort($allPayments, function ($a, $b) {
-        return strtotime($b['created_at']) - strtotime($a['created_at']);
-    });
-    $recentPayments = array_slice($allPayments, 0, 5);
+    // ✅ FIXED: Get recent payments with building filter and student names
+    $recentPayments = [];
+    try {
+        $paymentsFilterForRecent = [];
+        if ($selectedBuilding !== 'all') {
+            $paymentsFilterForRecent['building_code'] = $selectedBuilding;
+        }
+        
+        $allPayments = $supabase->select('payments', 'payment_id,amount_paid,student_id,building_code,created_at', $paymentsFilterForRecent);
+        usort($allPayments, function ($a, $b) {
+            return strtotime($b['created_at']) - strtotime($a['created_at']);
+        });
+        
+        // Get top 5 recent payments
+        $topPayments = array_slice($allPayments, 0, 5);
+        
+        // Get student names for these payments
+        if (!empty($topPayments)) {
+            $studentIds = array_unique(array_column($topPayments, 'student_id'));
+            $studentNames = $supabase->select('students', 'student_id,full_name', []);
+            
+            // Create student ID to name mapping
+            $studentNamesMap = [];
+            foreach ($studentNames as $student) {
+                $studentNamesMap[$student['student_id']] = $student['full_name'];
+            }
+            
+            // Add student names to payments
+            foreach ($topPayments as $payment) {
+                $studentId = $payment['student_id'];
+                $payment['student_name'] = $studentNamesMap[$studentId] ?? 'Unknown Student';
+                $recentPayments[] = $payment;
+            }
+        }
+    } catch (Exception $e) {
+        error_log('Recent payments error: ' . $e->getMessage());
+        $recentPayments = [];
+    }
 
     // Calculate monthly growth
     $previousMonthPayments = $supabase->select('payments', 'amount_paid', ['month_year' => $previousMonth]);
@@ -74,46 +134,73 @@ try {
     });
     $pendingPayments = count($pendingStudents);
 
-    // Get building-wise data
+    // ✅ UPDATED: Get accurate building-wise data with better performance calculation
     $buildingStats = [];
-    foreach (BUILDINGS as $code) {
-        $buildingStudents = $supabase->select('students', 'id', [
-            'building_code' => $code,
-            'status' => 'active'
-        ]);
+    if (!empty($buildingCodes)) {
+        foreach ($buildingCodes as $code) {
+            // Get students for this building
+            $buildingStudents = $supabase->select('students', 'id', [
+                'building_code' => $code,
+                'status' => 'active'
+            ]);
 
-        $buildingPayments = $supabase->select('payments', 'amount_paid', [
-            'building_code' => $code,
-            'month_year' => $currentMonth
-        ]);
+            // Get payments for this building
+            $buildingPayments = $supabase->select('payments', 'amount_paid', [
+                'building_code' => $code,
+                'month_year' => $currentMonth
+            ]);
 
-        $buildingRooms = $supabase->select('rooms', 'id', [
-            'building_code' => $code,
-            'status' => 'available'
-        ]);
+            // Get actual room data for this building
+            $buildingRooms = $supabase->select('rooms', 'capacity,current_occupancy,status', [
+                'building_code' => $code
+            ]);
 
-        $studentCount = count($buildingStudents);
-        $revenue = array_sum(array_column($buildingPayments, 'amount_paid'));
-        $totalRooms = count($buildingRooms);
-        $occupancyRate = $totalRooms > 0 ? round(($studentCount / ($totalRooms * 2)) * 100, 1) : 0;
+            $studentCount = count($buildingStudents);
+            $revenue = array_sum(array_column($buildingPayments, 'amount_paid'));
+            $totalRooms = count($buildingRooms);
+            
+            // Calculate actual capacity and occupancy from room data
+            $buildingCapacity = 0;
+            $buildingOccupancy = 0;
+            foreach ($buildingRooms as $room) {
+                $buildingCapacity += intval($room['capacity']);
+                $buildingOccupancy += intval($room['current_occupancy']);
+            }
+            
+            $occupancyRate = $buildingCapacity > 0 ? round(($buildingOccupancy / $buildingCapacity) * 100, 1) : 0;
 
-        $buildingStats[$code] = [
-            'students' => $studentCount,
-            'revenue' => $revenue,
-            'occupancy' => min($occupancyRate, 100),
-            'total_rooms' => $totalRooms,
-            'performance' => $revenue > 0 ? 'good' : 'needs_attention'
-        ];
+            // ✅ ENHANCED: Better performance calculation
+            $performance = 'needs_attention'; // Default
+            
+            if ($revenue > 0 && $occupancyRate > 70) {
+                $performance = 'excellent';
+            } elseif ($revenue > 0 && $occupancyRate > 50) {
+                $performance = 'good';
+            } elseif ($revenue > 0 || $occupancyRate > 30) {
+                $performance = 'fair';
+            }
+            // else remains 'needs_attention'
+
+            $buildingStats[$code] = [
+                'students' => $studentCount,
+                'revenue' => $revenue,
+                'occupancy' => min($occupancyRate, 100),
+                'total_rooms' => $totalRooms,
+                'capacity' => $buildingCapacity,
+                'current_occupancy' => $buildingOccupancy,
+                'performance' => $performance
+            ];
+        }
     }
+
 } catch (Exception $e) {
     $error = 'Error loading dashboard data: ' . $e->getMessage();
     error_log('Dashboard error: ' . $e->getMessage());
     $systemStatus = 'error';
 }
 
-// Calculate total capacity
-$totalCapacity = $selectedBuilding === 'all' ? 120 : 40;
-$occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 100, 1) : 0;
+// ✅ UPDATED: Calculate accurate occupancy rate
+$occupancyRate = $totalCapacity > 0 ? round(($totalOccupied / $totalCapacity) * 100, 1) : 0;
 ?>
 
 <!-- Dashboard Content -->
@@ -125,7 +212,7 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
             <h1 class="text-2xl font-bold text-pg-text-primary">Dashboard</h1>
             <?php if ($selectedBuilding !== 'all'): ?>
                 <span class="text-xs bg-pg-accent bg-opacity-20 text-pg-accent px-2 py-1 rounded">
-                    <?php echo safe_html(BUILDING_NAMES[$selectedBuilding] ?? $selectedBuilding); ?>
+                    <?php echo htmlspecialchars($buildingNames[$selectedBuilding] ?? $selectedBuilding); ?>
                 </span>
             <?php endif; ?>
         </div>
@@ -141,9 +228,9 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H3m2 0V9a2 2 0 012-2h4a2 2 0 012 2v12"></path>
                     </svg>
                     <?php if ($selectedBuilding === 'all'): ?>
-                        Multi-building performance summary
+                        Multi-building performance summary • <?php echo $totalCapacity; ?> total bed capacity
                     <?php else: ?>
-                        <?php echo safe_html(BUILDING_NAMES[$selectedBuilding] ?? $selectedBuilding); ?> performance summary
+                        <?php echo htmlspecialchars($buildingNames[$selectedBuilding] ?? $selectedBuilding); ?> performance summary
                     <?php endif; ?>
                 </div>
             </div>
@@ -162,19 +249,22 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
         </div>
     </div>
 
-    <!-- API Status Alert -->
+    <!-- ✅ UPDATED: Show API Status Alert only on main dashboard (all buildings view) -->
+<?php if ($selectedBuilding === 'all'): ?>
     <div class="bg-status-success bg-opacity-10 border border-status-success text-status-success px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm animate-slide-up">
         <div class="flex items-center">
             <svg class="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
             </svg>
-            <span class="font-medium">API Mode Active:</span>
-            <span class="ml-1">All data loaded successfully</span>
+            <span class="font-medium">Real-time Data:</span>
+            <span class="ml-1">Room occupancy auto-synced • <?php echo count($allRoomsData); ?> rooms monitored</span>
             <div class="ml-auto hidden sm:flex items-center">
-                <span class="text-xs bg-status-success bg-opacity-20 px-2 py-1 rounded">Real-time Data</span>
+                <span class="text-xs bg-status-success bg-opacity-20 px-2 py-1 rounded">Live Sync Active</span>
             </div>
         </div>
     </div>
+<?php endif; ?>
+
 
     <!-- Key Metrics Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -190,11 +280,16 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
                                 <path fill-rule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
                             </svg>
                             <span class="text-xs text-status-success">+<?php echo $monthlyGrowth; ?>%</span>
-                        <?php else: ?>
+                        <?php elseif ($monthlyGrowth < 0): ?>
                             <svg class="w-3 h-3 mr-1 text-status-warning" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 112 0v11.586l4.293-4.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
                             </svg>
                             <span class="text-xs text-status-warning"><?php echo $monthlyGrowth; ?>%</span>
+                        <?php else: ?>
+                            <svg class="w-3 h-3 mr-1 text-pg-text-secondary" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="text-xs text-pg-text-secondary">0%</span>
                         <?php endif; ?>
                         <span class="text-xs text-pg-text-secondary ml-1 hidden sm:inline">vs last month</span>
                     </div>
@@ -220,7 +315,6 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
                         <circle cx="12" cy="8" r="3" stroke-width="2" />
                         <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
-
                 </div>
             </div>
         </div>
@@ -229,9 +323,9 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
         <div class="card animate-slide-up" style="animation-delay: 0.3s;">
             <div class="flex items-center justify-between">
                 <div class="min-w-0 flex-1">
-                    <p class="text-pg-text-secondary text-xs sm:text-sm font-medium truncate">Occupancy Rate</p>
+                    <p class="text-pg-text-secondary text-xs sm:text-sm font-medium truncate">Bed Occupancy Rate</p>
                     <p class="text-xl sm:text-2xl font-bold text-pg-text-primary"><?php echo $occupancyRate; ?>%</p>
-                    <p class="text-xs text-pg-text-secondary mt-1"><?php echo $totalStudents; ?>/<?php echo $totalCapacity; ?> capacity</p>
+                    <p class="text-xs text-pg-text-secondary mt-1"><?php echo $totalOccupied; ?>/<?php echo $totalCapacity; ?> beds occupied</p>
                 </div>
                 <div class="bg-purple-500 bg-opacity-20 p-2 sm:p-3 rounded-lg ml-2">
                     <svg class="w-5 h-5 sm:w-6 sm:h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,12 +367,12 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
         </div>
     </div>
 
-    <!-- Building-wise Performance -->
+    <!-- ✅ UPDATED: Building-wise Performance with Enhanced Logic -->
     <?php if ($selectedBuilding === 'all' && !empty($buildingStats)): ?>
         <div class="card animate-slide-up" style="animation-delay: 0.5s;">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
                 <h3 class="text-base sm:text-lg font-semibold text-pg-text-primary">Building Performance</h3>
-                <div class="text-xs text-pg-text-secondary">Real-time data</div>
+                <div class="text-xs text-pg-text-secondary">Real-time occupancy data</div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 <?php foreach ($buildingStats as $code => $stats): ?>
@@ -286,13 +380,18 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
                         <div class="flex items-center justify-between mb-3 sm:mb-4">
                             <div class="min-w-0 flex-1">
                                 <h4 class="font-semibold text-pg-text-primary text-sm sm:text-base truncate">
-                                    <?php echo safe_html(BUILDING_NAMES[$code] ?? $code); ?>
+                                    <?php echo htmlspecialchars($buildingNames[$code] ?? $code); ?>
                                 </h4>
-                                <p class="text-xs text-pg-text-secondary"><?php echo $stats['total_rooms']; ?> rooms available</p>
+                                <p class="text-xs text-pg-text-secondary"><?php echo $stats['total_rooms']; ?> rooms • <?php echo $stats['capacity']; ?> bed capacity</p>
                             </div>
                             <div class="flex items-center ml-2">
-                                <span class="text-xs bg-pg-accent bg-opacity-20 text-pg-accent px-2 py-1 rounded mr-2"><?php echo safe_html($code); ?></span>
-                                <div class="w-2 h-2 bg-<?php echo $stats['performance'] === 'good' ? 'status-success' : 'status-warning'; ?> rounded-full"></div>
+                                <span class="text-xs bg-pg-accent bg-opacity-20 text-pg-accent px-2 py-1 rounded mr-2"><?php echo htmlspecialchars($code); ?></span>
+                                <!-- ✅ UPDATED: Enhanced status indicator -->
+                                <div class="w-2 h-2 bg-<?php 
+                                    echo $stats['performance'] === 'excellent' ? 'green-500' : 
+                                         ($stats['performance'] === 'good' ? 'status-success' : 
+                                         ($stats['performance'] === 'fair' ? 'status-warning' : 'status-danger')); 
+                                ?> rounded-full"></div>
                             </div>
                         </div>
 
@@ -308,7 +407,7 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
                             </div>
 
                             <div class="flex justify-between items-center">
-                                <span class="text-xs sm:text-sm text-pg-text-secondary">Occupancy Rate</span>
+                                <span class="text-xs sm:text-sm text-pg-text-secondary">Bed Occupancy</span>
                                 <span class="font-semibold text-<?php echo $stats['occupancy'] > 80 ? 'status-success' : ($stats['occupancy'] > 60 ? 'status-warning' : 'status-danger'); ?> text-sm">
                                     <?php echo $stats['occupancy']; ?>%
                                 </span>
@@ -320,9 +419,20 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
                                     <div class="bg-pg-accent h-2 rounded-full transition-all duration-1000"
                                         style="width: <?php echo min($stats['occupancy'], 100); ?>%"></div>
                                 </div>
+                                <!-- ✅ UPDATED: Enhanced performance labels -->
                                 <div class="flex justify-between text-xs text-pg-text-secondary">
-                                    <span>Performance: <?php echo ucfirst(str_replace('_', ' ', $stats['performance'])); ?></span>
-                                    <span><?php echo $stats['students']; ?>/40 capacity</span>
+                                    <span>Performance: 
+                                        <?php 
+                                        $performanceLabels = [
+                                            'excellent' => 'Excellent',
+                                            'good' => 'Good', 
+                                            'fair' => 'Fair',
+                                            'needs_attention' => 'Needs Attention'
+                                        ];
+                                        echo $performanceLabels[$stats['performance']] ?? 'Unknown'; 
+                                        ?>
+                                    </span>
+                                    <span><?php echo $stats['current_occupancy']; ?>/<?php echo $stats['capacity']; ?> beds</span>
                                 </div>
                             </div>
                         </div>
@@ -344,10 +454,17 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
 
     <!-- Recent Activity Section -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <!-- Recent Students -->
+        <!-- ✅ FIXED: Recent Students (Building-Filtered) -->
         <div class="card animate-slide-up" style="animation-delay: 0.6s;">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-base sm:text-lg font-semibold text-pg-text-primary">Recent Students</h3>
+                <h3 class="text-base sm:text-lg font-semibold text-pg-text-primary">
+                    Recent Students
+                    <?php if ($selectedBuilding !== 'all'): ?>
+                        <span class="text-xs text-pg-text-secondary ml-1">
+                            (<?php echo htmlspecialchars($buildingNames[$selectedBuilding] ?? $selectedBuilding); ?>)
+                        </span>
+                    <?php endif; ?>
+                </h3>
                 <a href="<?php echo route('admin/students/index.php'); ?>" class="text-xs text-pg-accent hover:text-green-400">View All</a>
             </div>
 
@@ -362,8 +479,8 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
                                     </svg>
                                 </div>
                                 <div class="min-w-0 flex-1">
-                                    <p class="text-sm font-medium text-pg-text-primary truncate"><?php echo safe_html($student['full_name']); ?></p>
-                                    <p class="text-xs text-pg-text-secondary"><?php echo safe_html($student['building_code']); ?> • <?php echo date('M j', strtotime($student['created_at'])); ?></p>
+                                    <p class="text-sm font-medium text-pg-text-primary truncate"><?php echo htmlspecialchars($student['full_name']); ?></p>
+                                    <p class="text-xs text-pg-text-secondary"><?php echo htmlspecialchars($student['building_code']); ?> • <?php echo date('M j', strtotime($student['created_at'])); ?></p>
                                 </div>
                             </div>
                             <span class="text-xs bg-status-success bg-opacity-20 text-status-success px-2 py-1 rounded ml-2 flex-shrink-0">Active</span>
@@ -380,10 +497,17 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
             <?php endif; ?>
         </div>
 
-        <!-- Recent Payments -->
+        <!-- ✅ FIXED: Recent Payments (Building-Filtered) -->
         <div class="card animate-slide-up" style="animation-delay: 0.7s;">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-base sm:text-lg font-semibold text-pg-text-primary">Recent Payments</h3>
+                <h3 class="text-base sm:text-lg font-semibold text-pg-text-primary">
+                    Recent Payments
+                    <?php if ($selectedBuilding !== 'all'): ?>
+                        <span class="text-xs text-pg-text-secondary ml-1">
+                            (<?php echo htmlspecialchars($buildingNames[$selectedBuilding] ?? $selectedBuilding); ?>)
+                        </span>
+                    <?php endif; ?>
+                </h3>
                 <a href="<?php echo route('admin/payments/index.php'); ?>" class="text-xs text-pg-accent hover:text-green-400">View All</a>
             </div>
 
@@ -399,7 +523,12 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
                                 </div>
                                 <div class="min-w-0 flex-1">
                                     <p class="text-sm font-medium text-pg-text-primary">₹<?php echo number_format($payment['amount_paid']); ?></p>
-                                    <p class="text-xs text-pg-text-secondary"><?php echo safe_html($payment['building_code']); ?> • <?php echo date('M j', strtotime($payment['created_at'])); ?></p>
+                                    <!-- ✅ UPDATED: Show student name along with building and date -->
+                                    <p class="text-xs text-pg-text-secondary">
+                                        <?php echo htmlspecialchars($payment['student_name']); ?> • 
+                                        <?php echo htmlspecialchars($payment['building_code']); ?> • 
+                                        <?php echo date('M j', strtotime($payment['created_at'])); ?>
+                                    </p>
                                 </div>
                             </div>
                             <span class="text-xs bg-status-success bg-opacity-20 text-status-success px-2 py-1 rounded ml-2 flex-shrink-0">Paid</span>
@@ -449,7 +578,6 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
             </div>
         </a>
 
-        <!-- UPDATED: Working Pending Payments Link -->
         <a href="<?php echo route('admin/reports/pending.php'); ?>"
             class="bg-pg-card border border-pg-border hover:border-pg-accent rounded-lg p-3 sm:p-4 transition-all duration-200 group hover:shadow-lg transform hover:scale-[1.02]">
             <div class="flex items-center">
@@ -465,7 +593,6 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
             </div>
         </a>
 
-        <!-- UPDATED: Working Monthly Report Link -->
         <a href="<?php echo route('admin/reports/monthly.php'); ?>"
             class="bg-pg-card border border-pg-border hover:border-pg-accent rounded-lg p-3 sm:p-4 transition-all duration-200 group hover:shadow-lg transform hover:scale-[1.02]">
             <div class="flex items-center">
@@ -485,7 +612,6 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
 
 <!-- Mobile-specific CSS adjustments -->
 <style>
-    /* Fix any overlay issues */
     .animate-fade-in {
         animation: fadeIn 0.6s ease-out;
     }
@@ -500,7 +626,6 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
             opacity: 0;
             transform: translateY(10px);
         }
-
         to {
             opacity: 1;
             transform: translateY(0);
@@ -512,36 +637,26 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
             opacity: 0;
             transform: translateY(20px);
         }
-
         to {
             opacity: 1;
             transform: translateY(0);
         }
     }
 
-    /* Ensure no overlay issues on mobile */
     @media (max-width: 1024px) {
         .space-y-4>*+* {
             margin-top: 1rem;
         }
-
         .space-y-6>*+* {
             margin-top: 1.5rem;
         }
-
-        /* Fix any z-index stacking issues */
-        .card,
-        .revenue-card,
-        .building-card {
+        .card, .revenue-card, .building-card {
             position: relative;
             z-index: 1;
         }
-
-        /* Ensure proper mobile spacing */
         .grid {
             gap: 1rem;
         }
-
         @media (min-width: 640px) {
             .grid {
                 gap: 1.5rem;
@@ -549,34 +664,28 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalStudents / $totalCapacity) * 
         }
     }
 
-    /* Mobile responsive text */
     @media (max-width: 640px) {
         .text-3xl {
             font-size: 1.875rem;
             line-height: 2.25rem;
         }
-
         .text-2xl {
             font-size: 1.5rem;
             line-height: 2rem;
         }
     }
 
-    /* Prevent horizontal overflow */
     * {
         box-sizing: border-box;
     }
-
     .min-w-0 {
         min-width: 0;
     }
-
     .truncate {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-
     .flex-shrink-0 {
         flex-shrink: 0;
     }

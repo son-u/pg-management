@@ -14,25 +14,24 @@ if (empty($paymentId)) {
 
 try {
     $supabase = supabase();
-    
+
     // Check if payment exists
     $paymentData = $supabase->select('payments', 'payment_id,student_id', ['payment_id' => $paymentId]);
-    
+
     if (empty($paymentData)) {
         flash('error', 'Payment not found.');
         header('Location: index.php');
         exit();
     }
-    
+
     // Delete the payment
     $result = $supabase->delete('payments', ['payment_id' => $paymentId]);
-    
+
     if ($result) {
         flash('success', 'Payment record deleted successfully.');
     } else {
         flash('error', 'Failed to delete payment record.');
     }
-    
 } catch (Exception $e) {
     flash('error', 'Error deleting payment: ' . $e->getMessage());
     error_log('Delete payment error: ' . $e->getMessage());
@@ -41,4 +40,3 @@ try {
 // Redirect back to payments listing
 header('Location: index.php');
 exit();
-?>

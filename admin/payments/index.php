@@ -25,6 +25,16 @@ $totalAmount = 0;
 $totalPages = 0;
 $error = '';
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Payments index buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
 try {
     $supabase = supabase();
 
@@ -64,6 +74,27 @@ try {
     usort($allPayments, function($a, $b) {
         return strtotime($b['payment_date']) - strtotime($a['payment_date']);
     });
+
+    // ✅ NEW: Get student names for all payments
+    if (!empty($allPayments)) {
+        $studentIds = array_unique(array_map(function($payment) {
+            return $payment['student_id'];
+        }, $allPayments));
+        
+        $studentsData = $supabase->select('students', 'student_id,full_name', []);
+        
+        // Create student ID to name mapping
+        $studentNameMap = [];
+        foreach ($studentsData as $student) {
+            $studentNameMap[$student['student_id']] = $student['full_name'];
+        }
+        
+        // Add student names to payments
+        foreach ($allPayments as &$payment) {
+            $payment['student_name'] = $studentNameMap[$payment['student_id']] ?? 'Unknown Student';
+        }
+        unset($payment); // Break reference
+    }
 
     $totalPayments = count($allPayments);
     $totalPages = ceil($totalPayments / $perPage);
@@ -208,12 +239,16 @@ function getStatusBadge($status) {
                     <label for="building" class="block text-sm font-medium text-pg-text-primary mb-2">Building</label>
                     <select id="building" name="building" class="select-field w-full">
                         <option value="all">All Buildings</option>
-                        <?php foreach (BUILDINGS as $code): ?>
-                            <option value="<?php echo $code; ?>" 
-                                    <?php echo $selectedBuilding === $code ? 'selected' : ''; ?>>
-                                <?php echo BUILDING_NAMES[$code]; ?>
-                            </option>
-                        <?php endforeach; ?>
+                        <?php if (!empty($buildingNames)): ?>
+                            <?php foreach ($buildingNames as $code => $name): ?>
+                                <option value="<?php echo htmlspecialchars($code); ?>" 
+                                        <?php echo $selectedBuilding === $code ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($name); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="" disabled>No buildings available</option>
+                        <?php endif; ?>
                     </select>
                 </div>
 
@@ -262,7 +297,7 @@ function getStatusBadge($status) {
         </form>
     </div>
 
-    <!-- Payments Table -->
+    <!-- ✅ UPDATED: Payments Table with Student Names -->
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full">
@@ -304,13 +339,15 @@ function getStatusBadge($status) {
                                 <td class="px-6 py-4 font-mono text-sm">
                                     <?php echo htmlspecialchars($payment['payment_id']); ?>
                                 </td>
+                                <!-- ✅ UPDATED: Show student name and ID with building -->
                                 <td class="px-6 py-4">
                                     <div>
                                         <div class="font-medium text-pg-text-primary">
-                                            <?php echo htmlspecialchars($payment['student_id']); ?>
+                                            <?php echo htmlspecialchars($payment['student_name'] ?? 'Unknown Student'); ?>
                                         </div>
                                         <div class="text-sm text-pg-text-secondary">
-                                            <?php echo BUILDING_NAMES[$payment['building_code']] ?? $payment['building_code']; ?>
+                                            <?php echo htmlspecialchars($payment['student_id']); ?> • 
+                                            <?php echo htmlspecialchars($buildingNames[$payment['building_code']] ?? $payment['building_code']); ?>
                                         </div>
                                     </div>
                                 </td>

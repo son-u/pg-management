@@ -14,7 +14,7 @@ if (
 header('Content-Type: application/json');
 
 try {
-    if (isset($_SESSION['user_id']) && !is_session_expired()) {
+    if (isset($_SESSION['admin_id']) && !is_session_expired()) {
         extend_session();
 
         echo json_encode([

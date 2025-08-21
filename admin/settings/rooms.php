@@ -1,18 +1,24 @@
 <?php
 require_once '../../config/config.php';
 require_once '../../config/database.php';
-
 $title = 'Room Management';
 require_once '../../includes/auth_check.php';
 
 $error = '';
 $success = '';
+$supabase = supabase();
+$buildings = $supabase->select('buildings', '*', []);
+$rooms = $supabase->select('rooms', '*', []);
 
-try {
-    $supabase = supabase();
+// Create building names array
+$buildingNames = [];
+foreach ($buildings as $building) {
+    $buildingNames[$building['building_code']] = $building['building_name'];
+}
 
-    // Handle form submissions
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// Handle form submissions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
         $action = $_POST['action'] ?? '';
 
         if ($action === 'add') {
@@ -77,50 +83,35 @@ try {
                 throw new Exception('Failed to delete room');
             }
         }
+
+        // Refresh rooms data
+        $rooms = $supabase->select('rooms', '*', []);
+    } catch (Exception $e) {
+        $error = $e->getMessage();
     }
-
-    // Get room for editing if specified
-    $editRoom = null;
-    if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
-        $editRooms = $supabase->select('rooms', '*', ['id' => intval($_GET['edit'])]);
-        $editRoom = !empty($editRooms) ? $editRooms[0] : null;
-    }
-
-    // Fetch all rooms with building info
-    $rooms = $supabase->select('rooms', '*', []);
-
-    // Fetch all buildings for dropdown
-    $buildings = $supabase->select('buildings', 'building_code,building_name', []);
-
-    // Sort rooms by building and room number
-    usort($rooms, function ($a, $b) {
-        $buildingCompare = strcmp($a['building_code'], $b['building_code']);
-        if ($buildingCompare === 0) {
-            return strcmp($a['room_number'], $b['room_number']);
-        }
-        return $buildingCompare;
-    });
-} catch (Exception $e) {
-    $error = 'Error: ' . $e->getMessage();
-    $rooms = [];
-    $buildings = [];
 }
 
-// Helper function to get building name
-function getBuildingName($buildingCode, $buildings)
-{
-    foreach ($buildings as $building) {
-        if ($building['building_code'] === $buildingCode) {
-            return $building['building_name'];
-        }
-    }
-    return $buildingCode;
+// Get room for editing
+$editRoom = null;
+if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
+    $editRooms = $supabase->select('rooms', '*', ['id' => intval($_GET['edit'])]);
+    $editRoom = !empty($editRooms) ? $editRooms[0] : null;
 }
+
+// Sort rooms by building and room number
+usort($rooms, function ($a, $b) {
+    $buildingCompare = strcmp($a['building_code'] ?? '', $b['building_code'] ?? '');
+    if ($buildingCompare === 0) {
+        return strcmp($a['room_number'] ?? '', $b['room_number'] ?? '');
+    }
+    return $buildingCompare;
+});
+
+// NOTE: getBuildingName() function is already defined in config.php - no need to redeclare it
 ?>
 
 <?php include '../../includes/header.php'; ?>
 
-<!-- Room Management Interface -->
 <div class="space-y-6">
     <!-- Page Header -->
     <div class="flex items-center justify-between">
@@ -130,7 +121,6 @@ function getBuildingName($buildingCode, $buildings)
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
             </a>
-
             <div>
                 <h1 class="text-2xl font-bold text-pg-text-primary">Room Management</h1>
                 <p class="text-pg-text-secondary mt-1">Manage room inventory and configuration</p>
@@ -170,7 +160,7 @@ function getBuildingName($buildingCode, $buildings)
         <form method="POST" class="space-y-4">
             <input type="hidden" name="action" value="<?php echo $editRoom ? 'edit' : 'add'; ?>">
             <?php if ($editRoom): ?>
-                <input type="hidden" name="room_id" value="<?php echo $editRoom['id']; ?>">
+                <input type="hidden" name="room_id" value="<?php echo htmlspecialchars($editRoom['id']); ?>">
             <?php endif; ?>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -184,7 +174,7 @@ function getBuildingName($buildingCode, $buildings)
                         <?php foreach ($buildings as $building): ?>
                             <option value="<?php echo htmlspecialchars($building['building_code']); ?>"
                                 <?php echo ($editRoom && $editRoom['building_code'] === $building['building_code']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($building['building_name']); ?>
+                                <?php echo htmlspecialchars($building['building_name']); ?> (<?php echo htmlspecialchars($building['building_code']); ?>)
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -324,7 +314,7 @@ function getBuildingName($buildingCode, $buildings)
                             <tr class="border-b border-pg-border hover:bg-pg-hover transition-colors duration-200">
                                 <td class="px-6 py-4">
                                     <div class="font-medium text-pg-text-primary">
-                                        <?php echo getBuildingName($room['building_code'], $buildings); ?>
+                                        <?php echo htmlspecialchars(getBuildingName($room['building_code'], $buildingNames)); ?>
                                     </div>
                                     <div class="text-sm text-pg-text-secondary">
                                         <?php echo htmlspecialchars($room['building_code']); ?>
@@ -337,36 +327,38 @@ function getBuildingName($buildingCode, $buildings)
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-pg-accent bg-opacity-20 text-pg-accent">
-                                        <?php echo $room['capacity']; ?>
+                                        <?php echo intval($room['capacity']); ?>
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 text-center">
-                                    <span class="text-sm <?php echo $room['current_occupancy'] >= $room['capacity'] ? 'text-status-danger' : 'text-pg-text-secondary'; ?>">
-                                        <?php echo $room['current_occupancy']; ?>/<?php echo $room['capacity']; ?>
+                                    <span class="text-sm <?php echo intval($room['current_occupancy']) >= intval($room['capacity']) ? 'text-status-danger' : 'text-pg-text-secondary'; ?>">
+                                        <?php echo intval($room['current_occupancy']); ?>/<?php echo intval($room['capacity']); ?>
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 text-right font-semibold text-pg-accent">
-                                    ₹<?php echo number_format($room['monthly_rent'], 0); ?>
+                                    ₹<?php echo number_format(floatval($room['monthly_rent']), 0); ?>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <span class="capitalize text-sm"><?php echo htmlspecialchars($room['room_type']); ?></span>
+                                    <span class="capitalize text-sm"><?php echo htmlspecialchars($room['room_type'] ?? 'shared'); ?></span>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <?php
-                                    $statusClass = [
+                                    $status = $room['status'] ?? 'available';
+                                    $statusColors = [
                                         'available' => 'bg-green-500 bg-opacity-20 text-green-400',
                                         'occupied' => 'bg-blue-500 bg-opacity-20 text-blue-400',
                                         'maintenance' => 'bg-yellow-500 bg-opacity-20 text-yellow-400',
                                         'reserved' => 'bg-purple-500 bg-opacity-20 text-purple-400'
-                                    ][$room['status']] ?? 'bg-gray-500 bg-opacity-20 text-gray-400';
+                                    ];
+                                    $statusClass = $statusColors[$status] ?? 'bg-gray-500 bg-opacity-20 text-gray-400';
                                     ?>
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $statusClass; ?>">
-                                        <?php echo ucfirst($room['status']); ?>
+                                        <?php echo ucfirst($status); ?>
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <div class="flex items-center justify-center space-x-2">
-                                        <a href="rooms.php?edit=<?php echo $room['id']; ?>"
+                                        <a href="rooms.php?edit=<?php echo intval($room['id']); ?>"
                                             class="text-blue-400 hover:text-blue-300 transition-colors duration-200"
                                             title="Edit Room">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -375,7 +367,7 @@ function getBuildingName($buildingCode, $buildings)
                                         </a>
                                         <form method="POST" class="inline" onsubmit="return confirm('Are you sure you want to delete this room?');">
                                             <input type="hidden" name="action" value="delete">
-                                            <input type="hidden" name="room_id" value="<?php echo $room['id']; ?>">
+                                            <input type="hidden" name="room_id" value="<?php echo intval($room['id']); ?>">
                                             <button type="submit"
                                                 class="text-red-400 hover:text-red-300 transition-colors duration-200"
                                                 title="Delete Room">

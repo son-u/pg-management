@@ -8,14 +8,22 @@ require_once '../../includes/auth_check.php';
 // Initialize variables
 $error = '';
 
-// Fix: Create a variable copy of BUILDINGS constant
-$buildingsArray = BUILDINGS;
-$selectedBuilding = $_GET['building'] ?? reset($buildingsArray);
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Building-wise report buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
+// Fix: Use dynamic building codes
+$selectedBuilding = $_GET['building'] ?? (reset($buildingCodes) ?: '');
 
 // Validate building selection
-if (!in_array($selectedBuilding, BUILDINGS)) {
-    $buildingsArray = BUILDINGS; // Reset the copy
-    $selectedBuilding = reset($buildingsArray);
+if (!in_array($selectedBuilding, $buildingCodes)) {
+    $selectedBuilding = reset($buildingCodes) ?: '';
 }
 
 try {
@@ -33,6 +41,20 @@ try {
         return ($payment['building_code'] ?? '') === $selectedBuilding;
     });
 
+    // ✅ NEW: Get actual room data for accurate capacity and occupancy
+    $buildingRooms = $supabase->select('rooms', 'capacity,current_occupancy,status', [
+        'building_code' => $selectedBuilding
+    ]);
+
+    $totalCapacity = 0;
+    $totalCurrentOccupancy = 0;
+    $totalRooms = count($buildingRooms);
+
+    foreach ($buildingRooms as $room) {
+        $totalCapacity += intval($room['capacity']);
+        $totalCurrentOccupancy += intval($room['current_occupancy']);
+    }
+
     // Calculate building metrics
     $metrics = [
         'total_students' => count($buildingStudents),
@@ -47,8 +69,15 @@ try {
         'total_pending' => 0,
         'total_late_fees' => 0,
         'occupancy_rate' => 0,
-        'avg_monthly_rent' => 0
+        'avg_monthly_rent' => 0,
+        'total_rooms' => $totalRooms,
+        'total_capacity' => $totalCapacity,
+        'current_occupancy' => $totalCurrentOccupancy
     ];
+
+    // ✅ UPDATED: Calculate accurate occupancy rate from actual room data
+    $metrics['occupancy_rate'] = $totalCapacity > 0 ? 
+        round(($totalCurrentOccupancy / $totalCapacity) * 100, 1) : 0;
 
     // Calculate financial metrics
     $statusBreakdown = ['paid' => 0, 'pending' => 0, 'partial' => 0, 'overdue' => 0];
@@ -89,11 +118,6 @@ try {
         }
     }
 
-    // Calculate occupancy rate (assuming 50 rooms per building - adjust as needed)
-    $totalRoomsCapacity = 50; // You can make this configurable per building
-    $metrics['occupancy_rate'] = $totalRoomsCapacity > 0 ?
-        round(($metrics['active_students'] / $totalRoomsCapacity) * 100, 1) : 0;
-
     // Calculate average monthly rent
     $rentSums = array_filter(array_map(function ($s) {
         return floatval($s['monthly_rent'] ?? 0);
@@ -104,8 +128,28 @@ try {
     // Sort monthly data by date (newest first)
     krsort($monthlyBreakdown);
 
-    // Get recent payments (last 10)
+    // ✅ NEW: Get recent payments with student names
     $recentPayments = array_slice(array_reverse($buildingPayments), 0, 10);
+    $recentPaymentsWithNames = [];
+
+    if (!empty($recentPayments)) {
+        // Get student names for recent payments
+        $studentIds = array_unique(array_column($recentPayments, 'student_id'));
+        $studentsData = $supabase->select('students', 'student_id,full_name', []);
+        
+        // Create student ID to name mapping
+        $studentNameMap = [];
+        foreach ($studentsData as $student) {
+            $studentNameMap[$student['student_id']] = $student['full_name'];
+        }
+        
+        // Add student names to payments
+        foreach ($recentPayments as $payment) {
+            $payment['student_name'] = $studentNameMap[$payment['student_id']] ?? 'Unknown Student';
+            $recentPaymentsWithNames[] = $payment;
+        }
+    }
+
 } catch (Exception $e) {
     $error = 'Error loading building report: ' . $e->getMessage();
     error_log('Building report error: ' . $e->getMessage());
@@ -113,7 +157,9 @@ try {
     // Default values
     $buildingStudents = [];
     $buildingPayments = [];
-    $recentPayments = [];
+    $recentPaymentsWithNames = [];
+    $totalCapacity = 0;
+    $totalCurrentOccupancy = 0;
     $metrics = [
         'total_students' => 0,
         'active_students' => 0,
@@ -123,7 +169,10 @@ try {
         'total_pending' => 0,
         'total_late_fees' => 0,
         'occupancy_rate' => 0,
-        'avg_monthly_rent' => 0
+        'avg_monthly_rent' => 0,
+        'total_rooms' => 0,
+        'total_capacity' => 0,
+        'current_occupancy' => 0
     ];
     $statusBreakdown = ['paid' => 0, 'pending' => 0, 'partial' => 0, 'overdue' => 0];
     $monthlyBreakdown = [];
@@ -170,7 +219,7 @@ function getStatusBadge($status)
             <div>
                 <h1 class="text-2xl font-bold text-pg-text-primary">Building Performance Report</h1>
                 <p class="text-pg-text-secondary mt-1">
-                    Detailed analysis for <?php echo BUILDING_NAMES[$selectedBuilding] ?? $selectedBuilding; ?>
+                    Detailed analysis for <?php echo htmlspecialchars($buildingNames[$selectedBuilding] ?? $selectedBuilding); ?>
                 </p>
             </div>
         </div>
@@ -205,12 +254,16 @@ function getStatusBadge($status)
                     Select Building
                 </label>
                 <select id="building" name="building" class="select-field w-full" onchange="this.form.submit()">
-                    <?php foreach (BUILDINGS as $buildingCode): ?>
-                        <option value="<?php echo htmlspecialchars($buildingCode); ?>"
-                            <?php echo $selectedBuilding === $buildingCode ? 'selected' : ''; ?>>
-                            <?php echo BUILDING_NAMES[$buildingCode]; ?>
-                        </option>
-                    <?php endforeach; ?>
+                    <?php if (!empty($buildingNames)): ?>
+                        <?php foreach ($buildingNames as $buildingCode => $buildingName): ?>
+                            <option value="<?php echo htmlspecialchars($buildingCode); ?>"
+                                <?php echo $selectedBuilding === $buildingCode ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($buildingName); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <option value="" disabled>No buildings available</option>
+                    <?php endif; ?>
                 </select>
             </div>
         </form>
@@ -230,14 +283,14 @@ function getStatusBadge($status)
             </p>
         </div>
 
-        <!-- Occupancy Rate -->
+        <!-- ✅ UPDATED: Accurate Occupancy Rate -->
         <div class="card text-center">
             <div class="text-3xl font-bold <?php echo $metrics['occupancy_rate'] >= 80 ? 'text-green-400' : ($metrics['occupancy_rate'] >= 60 ? 'text-yellow-400' : 'text-status-danger'); ?> mb-2">
                 <?php echo $metrics['occupancy_rate']; ?>%
             </div>
-            <h3 class="text-lg font-semibold text-pg-text-primary mb-1">Occupancy Rate</h3>
+            <h3 class="text-lg font-semibold text-pg-text-primary mb-1">Bed Occupancy Rate</h3>
             <p class="text-sm text-pg-text-secondary">
-                <?php echo number_format($metrics['active_students']); ?> / 50 rooms
+                <?php echo number_format($metrics['current_occupancy']); ?> / <?php echo number_format($metrics['total_capacity']); ?> beds occupied
             </p>
         </div>
 
@@ -264,31 +317,156 @@ function getStatusBadge($status)
 
     <!-- Financial Summary -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Payment Status Analysis -->
+        <!-- ✅ ENHANCED: Payment Status Analysis -->
         <div class="card">
             <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                 Payment Status Analysis
             </h3>
 
+            <?php
+            // ✅ ENHANCED: Calculate payment status based on actual amounts
+            $enhancedStatusBreakdown = [
+                'fully_paid' => ['count' => 0, 'label' => 'Fully Paid', 'color' => 'status-success'],
+                'partial_paid' => ['count' => 0, 'label' => 'Partial Payment', 'color' => 'status-info'], 
+                'pending' => ['count' => 0, 'label' => 'Pending', 'color' => 'status-warning'],
+                'overdue' => ['count' => 0, 'label' => 'Overdue', 'color' => 'status-danger']
+            ];
+            
+            $currentMonth = date('Y-m');
+            $previousMonth = date('Y-m', strtotime('-1 month'));
+            
+            foreach ($buildingPayments as $payment) {
+                $due = floatval($payment['amount_due'] ?? 0);
+                $paid = floatval($payment['amount_paid'] ?? 0);
+                $lateFee = floatval($payment['late_fee'] ?? 0);
+                $totalDue = $due + $lateFee;
+                $monthYear = $payment['month_year'] ?? '';
+                $paymentDate = $payment['payment_date'] ?? '';
+                
+                // Determine status based on actual amounts
+                if ($paid >= $totalDue && $totalDue > 0) {
+                    // Fully paid
+                    $enhancedStatusBreakdown['fully_paid']['count']++;
+                } elseif ($paid > 0 && $paid < $totalDue) {
+                    // Partial payment
+                    $enhancedStatusBreakdown['partial_paid']['count']++;
+                } elseif ($paid == 0) {
+                    // Check if overdue (older than current month with no payment)
+                    if ($monthYear < $currentMonth || 
+                        (empty($paymentDate) && $monthYear <= $previousMonth)) {
+                        $enhancedStatusBreakdown['overdue']['count']++;
+                    } else {
+                        $enhancedStatusBreakdown['pending']['count']++;
+                    }
+                }
+            }
+            
+            $totalAnalyzed = array_sum(array_column($enhancedStatusBreakdown, 'count'));
+            ?>
+
             <div class="space-y-3">
-                <?php foreach ($statusBreakdown as $status => $count): ?>
-                    <?php if ($count > 0): ?>
-                        <div class="flex items-center justify-between p-3 bg-pg-primary bg-opacity-50 rounded-lg">
-                            <div class="flex items-center">
-                                <span class="<?php echo getStatusBadge($status); ?> mr-3">
-                                    <?php echo ucfirst($status); ?>
-                                </span>
+                <?php foreach ($enhancedStatusBreakdown as $statusKey => $statusData): ?>
+                    <?php 
+                    $count = $statusData['count'];
+                    $percentage = $totalAnalyzed > 0 ? round(($count / $totalAnalyzed) * 100, 1) : 0;
+                    ?>
+                    <div class="flex items-center justify-between p-3 bg-pg-primary bg-opacity-50 rounded-lg hover:bg-pg-hover transition-colors duration-200">
+                        <div class="flex items-center">
+                            <!-- Status indicator dot -->
+                            <div class="w-3 h-3 rounded-full bg-<?php echo $statusData['color']; ?> mr-3"></div>
+                            <div>
+                                <div class="font-medium text-pg-text-primary">
+                                    <?php echo $statusData['label']; ?>
+                                </div>
+                                <?php if ($count > 0): ?>
+                                    <div class="text-xs text-pg-text-secondary">
+                                        <?php 
+                                        // Add helpful context based on status
+                                        switch($statusKey) {
+                                            case 'fully_paid':
+                                                echo 'All dues cleared';
+                                                break;
+                                            case 'partial_paid':
+                                                echo 'Balance remaining';
+                                                break;
+                                            case 'pending':
+                                                echo 'Current month dues';
+                                                break;
+                                            case 'overdue':
+                                                echo 'Past due payments';
+                                                break;
+                                        }
+                                        ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
-                            <div class="text-right">
-                                <div class="font-semibold text-pg-text-primary"><?php echo number_format($count); ?></div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-semibold text-pg-text-primary text-lg">
+                                <?php echo number_format($count); ?>
+                            </div>
+                            <div class="text-sm text-pg-text-secondary">
+                                <?php echo $percentage; ?>%
+                            </div>
+                            <!-- Progress bar -->
+                            <div class="w-16 bg-pg-border rounded-full h-2 mt-1">
+                                <div class="bg-<?php echo $statusData['color']; ?> h-2 rounded-full transition-all duration-300"
+                                    style="width: <?php echo min($percentage, 100); ?>%"></div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Summary stats -->
+            <div class="mt-4 pt-4 border-t border-pg-border">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div class="text-center">
+                        <div class="text-lg font-semibold text-green-400">
+                            <?php 
+                            $paidCount = $enhancedStatusBreakdown['fully_paid']['count'];
+                            $totalCount = $totalAnalyzed;
+                            echo $totalCount > 0 ? round(($paidCount / $totalCount) * 100, 1) : 0; 
+                            ?>%
+                        </div>
+                        <div class="text-pg-text-secondary">Payment Success Rate</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-semibold <?php 
+                            $overdueCount = $enhancedStatusBreakdown['overdue']['count'];
+                            echo $overdueCount > 0 ? 'text-status-danger' : 'text-green-400';
+                        ?>">
+                            <?php echo number_format($overdueCount); ?>
+                        </div>
+                        <div class="text-pg-text-secondary">Overdue Payments</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick action for overdue payments -->
+            <?php if ($enhancedStatusBreakdown['overdue']['count'] > 0): ?>
+                <div class="mt-4 p-3 bg-status-danger bg-opacity-10 border border-status-danger rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <svg class="w-5 h-5 text-status-danger mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                            <div>
+                                <div class="font-medium text-status-danger">
+                                    Action Required: <?php echo $enhancedStatusBreakdown['overdue']['count']; ?> Overdue Payments
+                                </div>
                                 <div class="text-sm text-pg-text-secondary">
-                                    <?php echo $metrics['total_payments'] > 0 ? round(($count / $metrics['total_payments']) * 100, 1) : 0; ?>%
+                                    Follow up required for past due accounts
                                 </div>
                             </div>
                         </div>
-                    <?php endif; ?>
-                <?php endforeach; ?>
-            </div>
+                        <a href="pending.php?building=<?php echo urlencode($selectedBuilding); ?>&filter=overdue" 
+                           class="btn-danger btn-sm">
+                            View Details
+                        </a>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
 
         <!-- Financial Summary -->
@@ -440,33 +618,35 @@ function getStatusBadge($status)
             </div>
         </div>
 
-        <!-- Recent Payments -->
+        <!-- ✅ UPDATED: Recent Payments with Student Names -->
         <div class="card">
             <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                 Recent Payments
             </h3>
 
             <div class="space-y-2 max-h-96 overflow-y-auto">
-                <?php if (empty($recentPayments)): ?>
+                <?php if (empty($recentPaymentsWithNames)): ?>
                     <p class="text-pg-text-secondary text-center py-4">No recent payments for this building</p>
                 <?php else: ?>
-                    <?php foreach ($recentPayments as $payment): ?>
+                    <?php foreach ($recentPaymentsWithNames as $payment): ?>
                         <div class="flex items-center justify-between p-3 bg-pg-primary bg-opacity-50 rounded-lg">
                             <div>
+                                <!-- ✅ UPDATED: Show student name instead of student_id -->
                                 <div class="font-medium text-pg-text-primary">
-                                    <?php echo htmlspecialchars($payment['student_id']); ?>
+                                    <?php echo htmlspecialchars($payment['student_name']); ?>
                                 </div>
                                 <div class="text-sm text-pg-text-secondary">
-                                    <?php echo formatDate($payment['payment_date']); ?>
-                                    • <?php echo htmlspecialchars($payment['month_year']); ?>
+                                    <?php echo htmlspecialchars($payment['student_id']); ?> • 
+                                    <?php echo formatDate($payment['payment_date']); ?> •
+                                    <?php echo htmlspecialchars($payment['month_year']); ?>
                                 </div>
                             </div>
                             <div class="text-right">
                                 <div class="font-semibold text-pg-accent">
                                     <?php echo formatCurrency($payment['amount_paid']); ?>
                                 </div>
-                                <span class="<?php echo getStatusBadge($payment['payment_status']); ?>">
-                                    <?php echo ucfirst($payment['payment_status']); ?>
+                                <span class="<?php echo getStatusBadge($payment['payment_status'] ?? 'paid'); ?>">
+                                    <?php echo ucfirst($payment['payment_status'] ?? 'paid'); ?>
                                 </span>
                             </div>
                         </div>

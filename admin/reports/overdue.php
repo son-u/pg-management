@@ -11,6 +11,21 @@ $selectedBuilding = $_GET['building'] ?? 'all';
 $urgencyFilter = $_GET['urgency'] ?? 'all';
 $sortBy = $_GET['sort'] ?? 'days_desc';
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Overdue payments buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
+// Validate building selection
+if ($selectedBuilding !== 'all' && !in_array($selectedBuilding, $buildingCodes)) {
+    $selectedBuilding = 'all';
+}
+
 try {
     $supabase = supabase();
 
@@ -356,9 +371,9 @@ function getUrgencyColor($urgency)
                 </label>
                 <select id="building" name="building" class="select-field w-full">
                     <option value="all" <?php echo $selectedBuilding === 'all' ? 'selected' : ''; ?>>All Buildings</option>
-                    <?php foreach (BUILDINGS as $code): ?>
-                        <option value="<?php echo $code; ?>" <?php echo $selectedBuilding === $code ? 'selected' : ''; ?>>
-                            <?php echo BUILDING_NAMES[$code]; ?>
+                    <?php foreach ($buildingCodes as $code): ?>
+                        <option value="<?php echo htmlspecialchars($code); ?>" <?php echo $selectedBuilding === $code ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($buildingNames[$code] ?? $code); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -461,7 +476,7 @@ function getUrgencyColor($urgency)
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="font-medium text-pg-text-primary">
-                                        <?php echo BUILDING_NAMES[$payment['building_code']] ?? $payment['building_code']; ?>
+                                        <?php echo htmlspecialchars($buildingNames[$payment['building_code']] ?? $payment['building_code']); ?>
                                     </div>
                                     <?php if ($student && !empty($student['room_number'])): ?>
                                         <div class="text-sm text-pg-text-secondary">

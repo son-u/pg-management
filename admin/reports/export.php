@@ -14,6 +14,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'download') {
 $error = '';
 $success = '';
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Export page buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
 try {
     $supabase = supabase();
     
@@ -315,6 +325,15 @@ function exportBuildingData($supabase, $format, $building) {
         throw new Exception('Building code is required for building export');
     }
 
+    // Get buildings data using the new Buildings class for building name lookup
+    try {
+        $buildingNames = Buildings::getNames();
+        $buildingName = $buildingNames[$building] ?? $building;
+    } catch (Exception $e) {
+        error_log('Export building data buildings error: ' . $e->getMessage());
+        $buildingName = $building;
+    }
+
     // Get students from the building
     $allStudents = $supabase->select('students', '*', []);
     $buildingStudents = array_filter($allStudents, function($student) use ($building) {
@@ -387,10 +406,8 @@ function exportBuildingData($supabase, $format, $building) {
         'month_year' => 'Period'
     ];
 
-    $buildingName = BUILDING_NAMES[$building] ?? $building;
     outputFile('building_' . $building . '_data_' . date('Ymd'), $combinedData, $columns, $format);
 }
-
 
 function outputFile($filename, $data, $columns, $format) {
     if ($format === 'excel') {

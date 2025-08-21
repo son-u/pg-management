@@ -2,6 +2,16 @@
 // Get current building selection
 $selectedBuilding = $_GET['building'] ?? $_SESSION['selected_building'] ?? 'all';
 $currentRoute = $_SERVER['REQUEST_URI'];
+
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Building selector error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
 ?>
 
 <div class="relative" x-data="{ open: false }">
@@ -14,7 +24,7 @@ $currentRoute = $_SERVER['REQUEST_URI'];
         <?php if ($selectedBuilding === 'all'): ?>
             All Buildings
         <?php else: ?>
-            <?php echo BUILDING_NAMES[$selectedBuilding] ?? $selectedBuilding; ?>
+            <?php echo htmlspecialchars($buildingNames[$selectedBuilding] ?? $selectedBuilding); ?>
         <?php endif; ?>
 
         <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,16 +56,25 @@ $currentRoute = $_SERVER['REQUEST_URI'];
         <div class="border-t border-pg-border"></div>
 
         <!-- Individual Buildings -->
-        <?php foreach (BUILDINGS as $code): ?>
-            <a href="<?php echo updateUrlParameter($currentRoute, 'building', $code); ?>"
-                class="block px-4 py-3 text-sm text-pg-text-primary hover:bg-pg-hover <?php echo $selectedBuilding === $code ? 'bg-pg-accent text-white' : ''; ?> <?php echo $code === 'B3' ? 'last:rounded-b-lg' : ''; ?>">
-                <div class="flex items-center">
-                    <span class="w-3 h-3 bg-pg-accent rounded-full mr-3 flex-shrink-0"></span>
-                    <?php echo BUILDING_NAMES[$code]; ?>
-                    <span class="ml-auto text-xs text-pg-text-secondary"><?php echo $code; ?></span>
-                </div>
-            </a>
-        <?php endforeach; ?>
+        <?php if (!empty($buildingCodes)): ?>
+            <?php
+            $lastCode = end($buildingCodes);
+            foreach ($buildingCodes as $code):
+            ?>
+                <a href="<?php echo updateUrlParameter($currentRoute, 'building', $code); ?>"
+                    class="block px-4 py-3 text-sm text-pg-text-primary hover:bg-pg-hover <?php echo $selectedBuilding === $code ? 'bg-pg-accent text-white' : ''; ?> <?php echo $code === $lastCode ? 'last:rounded-b-lg' : ''; ?>">
+                    <div class="flex items-center">
+                        <span class="w-3 h-3 bg-pg-accent rounded-full mr-3 flex-shrink-0"></span>
+                        <?php echo htmlspecialchars($buildingNames[$code] ?? $code); ?>
+                        <span class="ml-auto text-xs text-pg-text-secondary"><?php echo htmlspecialchars($code); ?></span>
+                    </div>
+                </a>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <div class="px-4 py-3 text-sm text-pg-text-secondary">
+                No buildings available
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 

@@ -19,6 +19,14 @@ $payment = null;
 $student = null;
 $error = '';
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Receipt buildings error: ' . $e->getMessage());
+    $buildingNames = [];
+}
+
 try {
     $supabase = supabase();
 
@@ -437,7 +445,7 @@ $balance = $totalAmount - $amountPaid;
                             <div>
                                 <div class="info-item">
                                     <div class="info-label">Building</div>
-                                    <div class="info-value"><?php echo BUILDING_NAMES[$student['building_code']] ?? $student['building_code']; ?></div>
+                                    <div class="info-value"><?php echo htmlspecialchars($buildingNames[$student['building_code']] ?? $student['building_code']); ?></div>
                                 </div>
                                 <div class="info-item">
                                     <div class="info-label">Room Number</div>

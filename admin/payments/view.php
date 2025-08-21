@@ -19,6 +19,14 @@ $payment = null;
 $student = null;
 $error = '';
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Payment view buildings error: ' . $e->getMessage());
+    $buildingNames = [];
+}
+
 try {
     $supabase = supabase();
 
@@ -216,7 +224,7 @@ function getPaymentMethodIcon($method)
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-pg-text-secondary mb-1">Building</label>
-                                <p class="text-pg-text-primary"><?php echo BUILDING_NAMES[$student['building_code']] ?? $student['building_code']; ?></p>
+                                <p class="text-pg-text-primary"><?php echo htmlspecialchars($buildingNames[$student['building_code']] ?? $student['building_code']); ?></p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-pg-text-secondary mb-1">Room Number</label>
@@ -289,7 +297,6 @@ function getPaymentMethodIcon($method)
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-pg-text-secondary mb-1">Amount Paid</label>
-                            <!-- FIXED: Removed conflicting classes -->
                             <p class="text-pg-accent font-semibold"><?php echo formatCurrency($payment['amount_paid']); ?></p>
                         </div>
                         <div>
@@ -323,7 +330,6 @@ function getPaymentMethodIcon($method)
                         <?php endif; ?>
                     </div>
                 </div>
-
 
                 <!-- Additional Information -->
                 <?php if (!empty($payment['notes'])): ?>
@@ -364,7 +370,7 @@ function getPaymentMethodIcon($method)
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-pg-text-secondary mb-1">Building</label>
-                            <p class="text-pg-text-primary"><?php echo BUILDING_NAMES[$payment['building_code']] ?? $payment['building_code']; ?></p>
+                            <p class="text-pg-text-primary"><?php echo htmlspecialchars($buildingNames[$payment['building_code']] ?? $payment['building_code']); ?></p>
                         </div>
                     </div>
                 </div>

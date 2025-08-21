@@ -2,23 +2,50 @@
 require_once '../config/config.php';
 require_once '../config/database.php';
 
+// Set JSON response headers
 header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET');
+header('Access-Control-Allow-Headers: Content-Type');
+
+// Initialize response
+$response = ['success' => false, 'rooms' => [], 'message' => ''];
 
 try {
-    $building = $_GET['building'] ?? '';
-
-    if (empty($building)) {
-        echo json_encode(['success' => false, 'error' => 'Building code required']);
-        exit;
+    // Get building code from query parameter
+    $buildingCode = $_GET['building'] ?? '';
+    
+    if (empty($buildingCode)) {
+        throw new Exception('Building code is required');
     }
-
+    
     $supabase = supabase();
-    $rooms = $supabase->select('rooms', 'room_number,capacity,current_occupancy,status', [
-        'building_code' => $building,
-        'status' => 'available'
+    
+    // Get available rooms for the building
+    $rooms = $supabase->select('rooms', '*', [
+        'building_code' => $buildingCode
     ]);
-
-    echo json_encode(['success' => true, 'rooms' => $rooms ?: []]);
+    
+    if (empty($rooms)) {
+        $response['message'] = 'No rooms found for this building';
+        $response['success'] = true; // Still success, just no rooms
+    } else {
+        // Sort rooms by room number
+        usort($rooms, function($a, $b) {
+            return strcmp($a['room_number'], $b['room_number']);
+        });
+        
+        $response['success'] = true;
+        $response['rooms'] = $rooms;
+        $response['message'] = count($rooms) . ' rooms found';
+    }
+    
 } catch (Exception $e) {
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    $response['message'] = 'Error: ' . $e->getMessage();
+    error_log('Get rooms API error: ' . $e->getMessage());
 }
+
+// Return JSON response
+echo json_encode($response);
+?>
+

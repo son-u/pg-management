@@ -1,6 +1,10 @@
 <?php
 $currentPage = basename($_SERVER['SCRIPT_NAME'], '.php');
 $currentDir = basename(dirname($_SERVER['SCRIPT_NAME']));
+
+// Get buildings data using the new Buildings class
+$buildingCodes = Buildings::getCodes();
+$buildingNames = Buildings::getNames();
 ?>
 
 <div x-data="{ sidebarOpen: false }" @keydown.window.escape="sidebarOpen = false">
@@ -40,7 +44,6 @@ $currentDir = basename(dirname($_SERVER['SCRIPT_NAME']));
                 Dashboard
             </a>
 
-
             <!-- Buildings Section -->
             <div class="pt-4">
                 <!-- Enhanced Buildings Header -->
@@ -50,13 +53,20 @@ $currentDir = basename(dirname($_SERVER['SCRIPT_NAME']));
                 </div>
 
                 <!-- Individual Buildings -->
-                <?php foreach (BUILDINGS as $code): ?>
-                    <a href="<?php echo route('admin/dashboard.php') . '?building=' . urlencode($code); ?>"
-                        class="flex items-center px-4 py-2 ml-2 text-sm font-medium rounded-lg transition-colors duration-200 <?php echo isset($_GET['building']) && $_GET['building'] === $code ? 'bg-pg-accent text-white' : 'text-pg-text-secondary hover:bg-pg-hover hover:text-pg-accent'; ?>">
-                        <span class="w-2 h-2 bg-pg-accent rounded-full mr-3"></span>
-                        <?php echo htmlspecialchars(BUILDING_NAMES[$code] ?? $code); ?>
-                    </a>
-                <?php endforeach; ?>
+                <?php if (!empty($buildingCodes)): ?>
+                    <?php foreach ($buildingCodes as $code): ?>
+                        <a href="<?php echo route('admin/dashboard.php') . '?building=' . urlencode($code); ?>"
+                            class="flex items-center px-4 py-2 ml-2 text-sm font-medium rounded-lg transition-colors duration-200 <?php echo isset($_GET['building']) && $_GET['building'] === $code ? 'bg-pg-accent text-white' : 'text-pg-text-secondary hover:bg-pg-hover hover:text-pg-accent'; ?>">
+                            <span class="w-2 h-2 bg-pg-accent rounded-full mr-3"></span>
+                            <?php echo htmlspecialchars($buildingNames[$code] ?? $code); ?>
+                        </a>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="px-4 py-2 ml-2 text-sm text-pg-text-secondary">
+                        <span class="w-2 h-2 bg-gray-400 rounded-full mr-3 inline-block"></span>
+                        No buildings found
+                    </div>
+                <?php endif; ?>
             </div>
 
             <!-- Students Section -->
@@ -273,13 +283,19 @@ $currentDir = basename(dirname($_SERVER['SCRIPT_NAME']));
             <div class="pt-3">
                 <p class="px-3 text-xs font-semibold text-pg-text-secondary uppercase tracking-wider">Buildings</p>
 
-                <?php foreach (BUILDINGS as $code): ?>
-                    <a href="<?php echo route('admin/dashboard.php') . '?building=' . urlencode($code); ?>"
-                        @click="sidebarOpen = false"
-                        class="block px-6 py-1.5 rounded-md text-sm transition-colors duration-200 <?php echo isset($_GET['building']) && $_GET['building'] === $code ? 'bg-pg-accent text-white' : 'text-pg-text-secondary hover:bg-pg-hover hover:text-pg-accent'; ?>">
-                        <?php echo htmlspecialchars(BUILDING_NAMES[$code] ?? $code); ?>
-                    </a>
-                <?php endforeach; ?>
+                <?php if (!empty($buildingCodes)): ?>
+                    <?php foreach ($buildingCodes as $code): ?>
+                        <a href="<?php echo route('admin/dashboard.php') . '?building=' . urlencode($code); ?>"
+                            @click="sidebarOpen = false"
+                            class="block px-6 py-1.5 rounded-md text-sm transition-colors duration-200 <?php echo isset($_GET['building']) && $_GET['building'] === $code ? 'bg-pg-accent text-white' : 'text-pg-text-secondary hover:bg-pg-hover hover:text-pg-accent'; ?>">
+                            <?php echo htmlspecialchars($buildingNames[$code] ?? $code); ?>
+                        </a>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="px-6 py-1.5 text-sm text-pg-text-secondary">
+                        No buildings found
+                    </div>
+                <?php endif; ?>
             </div>
 
             <!-- Students Section -->
@@ -301,7 +317,7 @@ $currentDir = basename(dirname($_SERVER['SCRIPT_NAME']));
 
             <!-- Payments Section -->
             <div class="pt-3">
-                <p class="px-3 text-xs font-semibold text-pg-text-secondary uppercase tracking-wider">Payments</p>
+                <p class="px-3 text-xs font-semibent text-pg-text-secondary uppercase tracking-wider">Payments</p>
 
                 <a href="<?php echo route('admin/payments/index.php'); ?>"
                     @click="sidebarOpen = false"

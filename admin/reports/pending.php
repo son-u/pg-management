@@ -11,6 +11,21 @@ $selectedBuilding = $_GET['building'] ?? 'all';
 $selectedStatus = $_GET['status'] ?? 'all';
 $sortBy = $_GET['sort'] ?? 'balance_desc';
 
+// Get buildings data using the new Buildings class
+try {
+    $buildingCodes = Buildings::getCodes();
+    $buildingNames = Buildings::getNames();
+} catch (Exception $e) {
+    error_log('Pending payments buildings error: ' . $e->getMessage());
+    $buildingCodes = [];
+    $buildingNames = [];
+}
+
+// Validate building selection
+if ($selectedBuilding !== 'all' && !in_array($selectedBuilding, $buildingCodes)) {
+    $selectedBuilding = 'all';
+}
+
 try {
     $supabase = supabase();
 
@@ -225,7 +240,7 @@ function getDaysOverdue($paymentDate, $monthYear)
                 <?php foreach ($buildingBreakdown as $buildingCode => $data): ?>
                     <div class="p-4 bg-red-500 bg-opacity-10 border border-red-500 border-opacity-30 rounded-lg">
                         <div class="font-semibold text-pg-text-primary mb-1">
-                            <?php echo BUILDING_NAMES[$buildingCode] ?? $buildingCode; ?>
+                            <?php echo htmlspecialchars($buildingNames[$buildingCode] ?? $buildingCode); ?>
                         </div>
                         <div class="text-status-danger font-bold text-xl">
                             <?php echo formatCurrency($data['amount']); ?>
@@ -249,9 +264,9 @@ function getDaysOverdue($paymentDate, $monthYear)
                 </label>
                 <select id="building" name="building" class="select-field w-full">
                     <option value="all" <?php echo $selectedBuilding === 'all' ? 'selected' : ''; ?>>All Buildings</option>
-                    <?php foreach (BUILDINGS as $code): ?>
-                        <option value="<?php echo $code; ?>" <?php echo $selectedBuilding === $code ? 'selected' : ''; ?>>
-                            <?php echo BUILDING_NAMES[$code]; ?>
+                    <?php foreach ($buildingCodes as $code): ?>
+                        <option value="<?php echo htmlspecialchars($code); ?>" <?php echo $selectedBuilding === $code ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($buildingNames[$code] ?? $code); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -350,7 +365,7 @@ function getDaysOverdue($paymentDate, $monthYear)
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="font-medium text-pg-text-primary">
-                                        <?php echo BUILDING_NAMES[$payment['building_code']] ?? $payment['building_code']; ?>
+                                        <?php echo htmlspecialchars($buildingNames[$payment['building_code']] ?? $payment['building_code']); ?>
                                     </div>
                                     <?php if ($student && !empty($student['room_number'])): ?>
                                         <div class="text-sm text-pg-text-secondary">

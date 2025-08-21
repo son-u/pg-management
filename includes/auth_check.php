@@ -53,8 +53,7 @@ function logout()
     redirect(route('index.php'));
 }
 
-
-// ⭐ UPDATED SESSION TIMEOUT CHECK - Now uses enhanced session management
+// from gemini for session
 function checkSessionTimeout()
 {
     // Use the new enhanced session management functions
@@ -65,8 +64,8 @@ function checkSessionTimeout()
         return false;
     }
 
-    // ⭐ AUTOMATICALLY REFRESH SESSION ON EACH PAGE LOAD
-    refresh_session();
+    // THIS LINE WAS THE PROBLEM AND HAS BEEN REMOVED
+    // refresh_session(); 
 
     // Optional: Warn user when session is about to expire (last 10 minutes)
     $remaining_time = get_session_remaining_time();
