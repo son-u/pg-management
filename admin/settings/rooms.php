@@ -16,6 +16,31 @@ foreach ($buildings as $building) {
     $buildingNames[$building['building_code']] = $building['building_name'];
 }
 
+// ✅ FUNCTION TO CALCULATE EFFECTIVE STATUS BASED ON OCCUPANCY
+function getEffectiveStatus($room) {
+    $storedStatus = $room['status'] ?? 'available';
+    $currentOccupancy = intval($room['current_occupancy']);
+    $capacity = intval($room['capacity']);
+    
+    // Priority order: maintenance > reserved > occupancy-based status
+    if ($storedStatus === 'maintenance') {
+        return 'maintenance';
+    }
+    
+    if ($storedStatus === 'reserved') {
+        return 'reserved';
+    }
+    
+    // Auto-calculate based on occupancy
+    if ($currentOccupancy >= $capacity) {
+        return 'occupied';
+    } elseif ($currentOccupancy === 0) {
+        return 'available';
+    } else {
+        return 'partially_occupied'; // New status for partially filled rooms
+    }
+}
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -25,20 +50,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $building_code = trim($_POST['building_code'] ?? '');
             $room_number = trim($_POST['room_number'] ?? '');
             $capacity = intval($_POST['capacity'] ?? 2);
-            $monthly_rent = floatval($_POST['monthly_rent'] ?? 0);
+            $standard_rent = floatval($_POST['standard_rent'] ?? 0);
             $room_type = trim($_POST['room_type'] ?? 'shared');
             $facilities = trim($_POST['facilities'] ?? '');
             $status = trim($_POST['status'] ?? 'available');
 
-            if (!$building_code || !$room_number || !$monthly_rent) {
-                throw new Exception('Building, room number, and monthly rent are required.');
+            if (!$building_code || !$room_number || !$standard_rent) {
+                throw new Exception('Building, room number, and standard rent are required.');
             }
 
             $insertData = [
                 'building_code' => $building_code,
                 'room_number' => $room_number,
                 'capacity' => $capacity,
-                'monthly_rent' => $monthly_rent,
+                'standard_rent' => $standard_rent,
                 'room_type' => $room_type,
                 'facilities' => $facilities,
                 'status' => $status,
@@ -59,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'building_code' => trim($_POST['building_code'] ?? ''),
                 'room_number' => trim($_POST['room_number'] ?? ''),
                 'capacity' => intval($_POST['capacity'] ?? 2),
-                'monthly_rent' => floatval($_POST['monthly_rent'] ?? 0),
+                'standard_rent' => floatval($_POST['standard_rent'] ?? 0),
                 'room_type' => trim($_POST['room_type'] ?? 'shared'),
                 'facilities' => trim($_POST['facilities'] ?? ''),
                 'status' => trim($_POST['status'] ?? 'available'),
@@ -151,6 +176,8 @@ usort($rooms, function ($a, $b) {
         </div>
     <?php endif; ?>
 
+    
+
     <!-- Add/Edit Room Form -->
     <div class="card">
         <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
@@ -210,20 +237,20 @@ usort($rooms, function ($a, $b) {
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Monthly Rent -->
+                <!-- Standard Rent -->
                 <div>
-                    <label for="monthly_rent" class="block text-sm font-medium text-pg-text-primary mb-2">
-                        Monthly Rent (₹) <span class="text-status-danger">*</span>
+                    <label for="standard_rent" class="block text-sm font-medium text-pg-text-primary mb-2">
+                        Standard Rent (₹) <span class="text-status-danger">*</span>
                     </label>
                     <input type="number"
                         step="0.01"
                         min="0"
-                        id="monthly_rent"
-                        name="monthly_rent"
+                        id="standard_rent"
+                        name="standard_rent"
                         required
                         class="input-field w-full"
                         placeholder="5000"
-                        value="<?php echo htmlspecialchars($editRoom['monthly_rent'] ?? ''); ?>">
+                        value="<?php echo htmlspecialchars($editRoom['standard_rent'] ?? ''); ?>">
                 </div>
 
                 <!-- Room Type -->
@@ -239,17 +266,17 @@ usort($rooms, function ($a, $b) {
                     </select>
                 </div>
 
-                <!-- Status -->
+                <!-- Manual Status Override -->
                 <div>
                     <label for="status" class="block text-sm font-medium text-pg-text-primary mb-2">
-                        Status
+                        Manual Status Override
                     </label>
                     <select id="status" name="status" class="select-field w-full">
-                        <option value="available" <?php echo ($editRoom && $editRoom['status'] === 'available') ? 'selected' : ''; ?>>Available</option>
-                        <option value="occupied" <?php echo ($editRoom && $editRoom['status'] === 'occupied') ? 'selected' : ''; ?>>Occupied</option>
+                        <option value="available" <?php echo ($editRoom && $editRoom['status'] === 'available') ? 'selected' : ''; ?>>Auto (Based on Occupancy)</option>
                         <option value="maintenance" <?php echo ($editRoom && $editRoom['status'] === 'maintenance') ? 'selected' : ''; ?>>Maintenance</option>
                         <option value="reserved" <?php echo ($editRoom && $editRoom['status'] === 'reserved') ? 'selected' : ''; ?>>Reserved</option>
                     </select>
+                    <p class="text-xs text-pg-text-secondary mt-1">Manual status overrides automatic occupancy-based status</p>
                 </div>
             </div>
 
@@ -303,7 +330,6 @@ usort($rooms, function ($a, $b) {
                             <th class="table-header text-left">Room</th>
                             <th class="table-header text-center">Capacity</th>
                             <th class="table-header text-center">Occupancy</th>
-                            <th class="table-header text-right">Rent</th>
                             <th class="table-header text-left">Type</th>
                             <th class="table-header text-center">Status</th>
                             <th class="table-header text-center">Actions</th>
@@ -311,6 +337,12 @@ usort($rooms, function ($a, $b) {
                     </thead>
                     <tbody>
                         <?php foreach ($rooms as $room): ?>
+                            <?php 
+                            // ✅ CALCULATE EFFECTIVE STATUS BASED ON OCCUPANCY
+                            $effectiveStatus = getEffectiveStatus($room);
+                            $currentOccupancy = intval($room['current_occupancy']);
+                            $capacity = intval($room['capacity']);
+                            ?>
                             <tr class="border-b border-pg-border hover:bg-pg-hover transition-colors duration-200">
                                 <td class="px-6 py-4">
                                     <div class="font-medium text-pg-text-primary">
@@ -327,34 +359,51 @@ usort($rooms, function ($a, $b) {
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-pg-accent bg-opacity-20 text-pg-accent">
-                                        <?php echo intval($room['capacity']); ?>
+                                        <?php echo $capacity; ?>
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 text-center">
-                                    <span class="text-sm <?php echo intval($room['current_occupancy']) >= intval($room['capacity']) ? 'text-status-danger' : 'text-pg-text-secondary'; ?>">
-                                        <?php echo intval($room['current_occupancy']); ?>/<?php echo intval($room['capacity']); ?>
+                                    <span class="text-sm <?php echo $currentOccupancy >= $capacity ? 'text-status-danger font-semibold' : ($currentOccupancy > 0 ? 'text-yellow-600' : 'text-pg-text-secondary'); ?>">
+                                        <?php echo $currentOccupancy; ?>/<?php echo $capacity; ?>
                                     </span>
-                                </td>
-                                <td class="px-6 py-4 text-right font-semibold text-pg-accent">
-                                    ₹<?php echo number_format(floatval($room['monthly_rent']), 0); ?>
+                                    <?php if ($currentOccupancy >= $capacity): ?>
+                                        <div class="text-xs text-status-danger font-medium">FULL</div>
+                                    <?php elseif ($currentOccupancy > 0): ?>
+                                        <div class="text-xs text-yellow-600">PARTIAL</div>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4">
                                     <span class="capitalize text-sm"><?php echo htmlspecialchars($room['room_type'] ?? 'shared'); ?></span>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <?php
-                                    $status = $room['status'] ?? 'available';
+                                    // ✅ UPDATED STATUS COLORS AND LOGIC
                                     $statusColors = [
                                         'available' => 'bg-green-500 bg-opacity-20 text-green-400',
-                                        'occupied' => 'bg-blue-500 bg-opacity-20 text-blue-400',
-                                        'maintenance' => 'bg-yellow-500 bg-opacity-20 text-yellow-400',
+                                        'occupied' => 'bg-blue-500 bg-opacity-20 text-blue-400', 
+                                        'partially_occupied' => 'bg-yellow-500 bg-opacity-20 text-yellow-500',
+                                        'maintenance' => 'bg-red-500 bg-opacity-20 text-red-400',
                                         'reserved' => 'bg-purple-500 bg-opacity-20 text-purple-400'
                                     ];
-                                    $statusClass = $statusColors[$status] ?? 'bg-gray-500 bg-opacity-20 text-gray-400';
+                                    $statusClass = $statusColors[$effectiveStatus] ?? 'bg-gray-500 bg-opacity-20 text-gray-400';
+                                    
+                                    // ✅ STATUS DISPLAY NAMES
+                                    $statusNames = [
+                                        'available' => 'Available',
+                                        'occupied' => 'Occupied',
+                                        'partially_occupied' => 'Partially Filled',
+                                        'maintenance' => 'Maintenance',
+                                        'reserved' => 'Reserved'
+                                    ];
+                                    $statusName = $statusNames[$effectiveStatus] ?? ucfirst($effectiveStatus);
                                     ?>
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $statusClass; ?>">
-                                        <?php echo ucfirst($status); ?>
+                                        <?php echo $statusName; ?>
                                     </span>
+                                    
+                                    <?php if ($room['status'] !== 'available' && in_array($room['status'], ['maintenance', 'reserved'])): ?>
+                                        <div class="text-xs text-pg-text-secondary mt-1">Manual Override</div>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <div class="flex items-center justify-center space-x-2">

@@ -20,6 +20,7 @@ if (empty($studentId)) {
 // Initialize variables
 $student = null;
 $error = '';
+$relatedRecords = [];
 
 // Get buildings data using the new Buildings class
 try {
@@ -29,7 +30,7 @@ try {
     $buildingNames = [];
 }
 
-// Load student data for confirmation
+// Load student data and check for related records
 try {
     $supabase = supabase();
 
@@ -42,6 +43,20 @@ try {
     }
 
     $student = $studentData[0];
+
+    // ✅ CHECK FOR RELATED RECORDS - UPDATED WITH CORRECT SCHEMA
+    // Check for payments using correct column names
+    $payments = $supabase->select('payments', 'id, payment_id, amount_paid, amount_due, payment_date, payment_type, month_year, payment_status', ['student_id' => $studentId]);
+    if (!empty($payments)) {
+        $relatedRecords['payments'] = $payments;
+    }
+
+    // Add other related tables as needed (e.g., attendance, complaints, etc.)
+    // $attendance = $supabase->select('attendance', 'id', ['student_id' => $studentId]);
+    // if (!empty($attendance)) {
+    //     $relatedRecords['attendance'] = $attendance;
+    // }
+
 } catch (Exception $e) {
     $error = 'Error loading student: ' . $e->getMessage();
     error_log('Student delete load error: ' . $e->getMessage());
@@ -53,11 +68,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($confirmDelete === 'yes') {
         try {
-            // Perform the deletion
+            // ✅ PERFORM CASCADE DELETION
+            $supabase = supabase();
+            
+            // Begin transaction-like operations
+            $deletionSuccess = true;
+            $deletedRecords = [];
+
+            // Delete related records first
+            if (!empty($relatedRecords['payments'])) {
+                $paymentResult = $supabase->delete('payments', ['student_id' => $studentId]);
+                if ($paymentResult) {
+                    $deletedRecords[] = count($relatedRecords['payments']) . ' payment record(s)';
+                } else {
+                    throw new Exception('Failed to delete payment records');
+                }
+            }
+
+            // Add deletion for other related tables as needed
+            // if (!empty($relatedRecords['attendance'])) {
+            //     $attendanceResult = $supabase->delete('attendance', ['student_id' => $studentId]);
+            //     if ($attendanceResult) {
+            //         $deletedRecords[] = count($relatedRecords['attendance']) . ' attendance record(s)';
+            //     } else {
+            //         throw new Exception('Failed to delete attendance records');
+            //     }
+            // }
+
+            // Finally, delete the student
             $result = $supabase->delete('students', ['student_id' => $studentId]);
 
             if ($result) {
-                flash('success', 'Student "' . htmlspecialchars($student['full_name']) . '" has been deleted successfully.');
+                $message = 'Student "' . htmlspecialchars($student['full_name']) . '" has been deleted successfully.';
+                if (!empty($deletedRecords)) {
+                    $message .= ' Also deleted: ' . implode(', ', $deletedRecords) . '.';
+                }
+                flash('success', $message);
                 header('Location: index.php');
                 exit();
             } else {
@@ -109,6 +155,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
 
     <?php if ($student): ?>
+        <!-- ✅ RELATED RECORDS WARNING (if any exist) - UPDATED WITH CORRECT COLUMNS -->
+        <?php if (!empty($relatedRecords)): ?>
+            <div class="bg-yellow-500 bg-opacity-10 border border-yellow-500 text-yellow-600 px-4 py-3 rounded-lg">
+                <div class="flex items-start">
+                    <svg class="w-5 h-5 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <div>
+                        <h4 class="font-semibold mb-2">Related Records Found</h4>
+                        <p class="text-sm mb-2">This student has related records that will also be deleted:</p>
+                        <ul class="text-sm space-y-1">
+                            <?php if (!empty($relatedRecords['payments'])): ?>
+                                <?php 
+                                $totalPaid = array_sum(array_column($relatedRecords['payments'], 'amount_paid'));
+                                $totalDue = array_sum(array_column($relatedRecords['payments'], 'amount_due'));
+                                ?>
+                                <li>• <strong><?php echo count($relatedRecords['payments']); ?> payment record(s)</strong></li>
+                                <li class="ml-4">- Total Paid: ₹<?php echo number_format($totalPaid, 2); ?></li>
+                                <li class="ml-4">- Total Due: ₹<?php echo number_format($totalDue, 2); ?></li>
+                            <?php endif; ?>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- ✅ DETAILED PAYMENT RECORDS (if any exist) -->
+        <?php if (!empty($relatedRecords['payments']) && count($relatedRecords['payments']) <= 10): ?>
+            <div class="card">
+                <h4 class="font-semibold text-pg-text-primary mb-3">Payment Records to be Deleted</h4>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-pg-border">
+                                <th class="text-left py-2">Payment ID</th>
+                                <th class="text-left py-2">Month/Year</th>
+                                <th class="text-right py-2">Amount Paid</th>
+                                <th class="text-right py-2">Amount Due</th>
+                                <th class="text-center py-2">Status</th>
+                                <th class="text-left py-2">Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($relatedRecords['payments'] as $payment): ?>
+                                <tr class="border-b border-pg-border">
+                                    <td class="py-2 font-mono text-xs"><?php echo htmlspecialchars($payment['payment_id']); ?></td>
+                                    <td class="py-2"><?php echo htmlspecialchars($payment['month_year']); ?></td>
+                                    <td class="py-2 text-right">₹<?php echo number_format($payment['amount_paid'], 2); ?></td>
+                                    <td class="py-2 text-right">₹<?php echo number_format($payment['amount_due'], 2); ?></td>
+                                    <td class="py-2 text-center">
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
+                                            <?php echo $payment['payment_status'] === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'; ?>">
+                                            <?php echo ucfirst($payment['payment_status']); ?>
+                                        </span>
+                                    </td>
+                                    <td class="py-2 capitalize"><?php echo htmlspecialchars($payment['payment_type']); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php elseif (!empty($relatedRecords['payments']) && count($relatedRecords['payments']) > 10): ?>
+            <div class="card">
+                <h4 class="font-semibold text-pg-text-primary mb-3">Payment Records Summary</h4>
+                <p class="text-pg-text-secondary">Too many payment records to display (<?php echo count($relatedRecords['payments']); ?> total). All will be permanently deleted.</p>
+            </div>
+        <?php endif; ?>
+
         <!-- Confirmation Card -->
         <div class="card border-status-danger">
             <div class="text-center mb-6">
@@ -155,7 +270,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <?php if (!empty($student['room_number'])): ?>
                                 <span>Room <?php echo htmlspecialchars($student['room_number']); ?></span>
                             <?php endif; ?>
-                            <!-- ✅ UPDATED: Changed from department to college_name -->
                             <?php if (!empty($student['college_name'])): ?>
                                 <span><?php echo htmlspecialchars($student['college_name']); ?></span>
                             <?php elseif (!empty($student['course'])): ?>
@@ -166,7 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            <!-- ✅ UPDATED: Warning Information (removed references to removed fields) -->
+            <!-- Warning Information -->
             <div class="bg-status-danger bg-opacity-5 border border-status-danger rounded-lg p-4 mb-6">
                 <h5 class="font-semibold text-status-danger mb-2 flex items-center">
                     <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -178,7 +292,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <li>• Student profile and personal information</li>
                     <li>• Academic records and accommodation details</li>
                     <li>• Contact information and parent details</li>
-                    <li>• All associated payment records (if any)</li>
+                    <?php if (!empty($relatedRecords['payments'])): ?>
+                        <li>• <strong class="text-status-danger"><?php echo count($relatedRecords['payments']); ?> payment record(s)</strong> with all transaction history</li>
+                    <?php endif; ?>
                     <li>• Profile photo and uploaded documents</li>
                     <li>• Additional notes and system records</li>
                 </ul>
@@ -196,6 +312,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <label for="confirm_deletion" class="text-sm text-pg-text-primary">
                         I understand that this action is permanent and cannot be undone. I want to delete
                         <strong><?php echo htmlspecialchars($student['full_name']); ?></strong>
+                        <?php if (!empty($relatedRecords)): ?>
+                            and all related records
+                        <?php endif; ?>
                         from the system.
                     </label>
                 </div>
@@ -266,7 +385,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Final confirmation before submission
                 deleteButton.closest('form').addEventListener('submit', function(e) {
-                    if (!confirm('Are you absolutely sure you want to delete this student? This action cannot be undone.')) {
+                    if (!confirm('Are you absolutely sure you want to delete this student and all related records? This action cannot be undone.')) {
                         e.preventDefault();
                     }
                 });

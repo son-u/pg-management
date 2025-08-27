@@ -355,12 +355,12 @@ try {
                         <input type="number" 
                                id="monthly_rent" 
                                name="monthly_rent" 
-                               value="<?php echo htmlspecialchars($formData['monthly_rent'] ?? '5000'); ?>"
+                               value="<?php echo htmlspecialchars($formData['monthly_rent'] ?? '7000'); ?>"
                                class="input-field w-full"
                                min="1000"
                                max="50000"
                                step="100"
-                               placeholder="5000">
+                               placeholder="7000">
                     </div>
                 </div>
             </div>

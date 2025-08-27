@@ -44,7 +44,7 @@ try {
     // Fetch all students matching filters
     $allStudents = $supabase->select('students', '*', $filters);
 
-    // ✅ UPDATED: Apply search filter (removed department reference)
+    // Apply search filter (still includes email in search but doesn't display it)
     if ($search !== '') {
         $searchLower = strtolower($search);
         $filteredStudents = array_filter($allStudents, function ($student) use ($searchLower) {
@@ -143,7 +143,7 @@ $queryParams = [
                         id="search"
                         name="search"
                         value="<?php echo htmlspecialchars($search); ?>"
-                        placeholder="Search by name, ID, phone, email, college, course..."
+                        placeholder="Search by name, ID, phone, college, course..."
                         class="input-field w-full">
                 </div>
 
@@ -193,7 +193,7 @@ $queryParams = [
         </form>
     </div>
 
-    <!-- ✅ UPDATED: Students Table (Removed Department Column) -->
+    <!-- ✅ UPDATED: Students Table (Removed Email Column) -->
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full">
@@ -202,7 +202,7 @@ $queryParams = [
                         <th class="table-header">Student ID</th>
                         <th class="table-header">Name</th>
                         <th class="table-header hidden sm:table-cell">Phone</th>
-                        <th class="table-header hidden md:table-cell">Email</th>
+                        <!-- ❌ REMOVED: Email column -->
                         <th class="table-header hidden lg:table-cell">College</th>
                         <th class="table-header">Building</th>
                         <th class="table-header hidden sm:table-cell">Room</th>
@@ -213,8 +213,8 @@ $queryParams = [
                 <tbody>
                     <?php if (empty($students)): ?>
                         <tr>
-                            <!-- ✅ UPDATED: colspan from 9 to 9 (still 9 columns total) -->
-                            <td colspan="9" class="px-6 py-12 text-center">
+                            <!-- ✅ UPDATED: colspan from 9 to 8 (removed email column) -->
+                            <td colspan="8" class="px-6 py-12 text-center">
                                 <div class="flex flex-col items-center">
                                     <svg class="w-12 h-12 text-pg-text-secondary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
@@ -257,8 +257,7 @@ $queryParams = [
                                     </div>
                                 </td>
                                 <td class="hidden sm:table-cell px-6 py-4"><?php echo htmlspecialchars($student['phone'] ?? '-'); ?></td>
-                                <td class="hidden md:table-cell px-6 py-4"><?php echo htmlspecialchars($student['email'] ?? '-'); ?></td>
-                                <!-- ✅ UPDATED: Changed from department to college_name -->
+                                <!-- ❌ REMOVED: Email column -->
                                 <td class="hidden lg:table-cell px-6 py-4">
                                     <div class="max-w-32 truncate" title="<?php echo htmlspecialchars($student['college_name'] ?? ''); ?>">
                                         <?php echo htmlspecialchars($student['college_name'] ?? '-'); ?>
