@@ -11,6 +11,9 @@ $selectedBuilding = $_GET['building'] ?? 'all';
 $selectedStatus = $_GET['status'] ?? 'all';
 $sortBy = $_GET['sort'] ?? 'balance_desc';
 
+// Get current month for consistency with dashboard
+$currentMonth = date('Y-m');
+
 // Get buildings data using the new Buildings class
 try {
     $buildingCodes = Buildings::getCodes();
@@ -26,46 +29,135 @@ if ($selectedBuilding !== 'all' && !in_array($selectedBuilding, $buildingCodes))
     $selectedBuilding = 'all';
 }
 
+// Function to get monthly rent for a student from their record
+function getMonthlyRentForStudent($student) {
+    return floatval($student['monthly_rent'] ?? 5000.00);
+}
+
+// Updated function to calculate days overdue
+function getDaysOverdue($paymentDate, $monthYear) {
+    if (empty($paymentDate)) {
+        // If no payment date, calculate days since month started
+        $monthStart = date('Y-m-01', strtotime($monthYear . '-01'));
+        $daysSinceMonthStart = floor((time() - strtotime($monthStart)) / (24 * 60 * 60));
+        return max(0, $daysSinceMonthStart);
+    }
+    
+    $paymentTime = strtotime($paymentDate);
+    $currentTime = time();
+    $daysDiff = floor(($currentTime - $paymentTime) / (24 * 60 * 60));
+    
+    return max(0, $daysDiff);
+}
+
 try {
     $supabase = supabase();
+    
+    if (!$supabase) {
+        throw new Exception('Failed to connect to database');
+    }
 
-    // Get all payments
-    $allPayments = $supabase->select('payments', '*', []);
+    // Get all active students with monthly_rent included
+    $allActiveStudents = $supabase->select('students', 'student_id,full_name,building_code,phone,room_number,monthly_rent', ['status' => 'active']);
+    
+    if ($allActiveStudents === false || $allActiveStudents === null) {
+        throw new Exception('Failed to fetch students data');
+    }
 
-    // Get all students for additional information
-    $allStudents = $supabase->select('students', '*', []);
-    $studentsById = array_column($allStudents, null, 'student_id');
+    // Get all payments for current month with building filter if needed
+    $currentMonthFilter = ['month_year' => $currentMonth];
+    if ($selectedBuilding !== 'all') {
+        $currentMonthFilter['building_code'] = $selectedBuilding;
+    }
+    
+    $allCurrentPayments = $supabase->select('payments', '*', $currentMonthFilter);
+    
+    if ($allCurrentPayments === false) {
+        $allCurrentPayments = []; // Handle case where no payments exist yet
+    }
 
-    // Filter payments with outstanding balance
+    // Create mapping of students who have made payments
+    $paidStudentIds = array_column($allCurrentPayments, 'student_id');
+    $paymentsById = array_column($allCurrentPayments, null, 'student_id');
+
+    // Initialize variables
     $pendingPayments = [];
     $totalPendingAmount = 0;
     $totalPendingPayments = 0;
 
-    foreach ($allPayments as $payment) {
-        $due = floatval($payment['amount_due'] ?? 0);
-        $paid = floatval($payment['amount_paid'] ?? 0);
-        $lateFee = floatval($payment['late_fee'] ?? 0);
-        $balance = ($due + $lateFee) - $paid;
+    // Debug logging
+    error_log('Pending payments debug: Total active students: ' . count($allActiveStudents));
+    error_log('Pending payments debug: Students with payments: ' . count($paidStudentIds));
 
-        if ($balance > 0) {
-            $payment['pending_balance'] = $balance;
-            $payment['student_info'] = $studentsById[$payment['student_id']] ?? null;
-
-            // Apply building filter
-            if ($selectedBuilding !== 'all' && $payment['building_code'] !== $selectedBuilding) {
-                continue;
-            }
-
+    foreach ($allActiveStudents as $student) {
+        $studentId = $student['student_id'];
+        $studentBuilding = $student['building_code'];
+        
+        // Apply building filter
+        if ($selectedBuilding !== 'all' && $studentBuilding !== $selectedBuilding) {
+            continue;
+        }
+        
+        // Check if student has payment for current month
+        $hasPayment = in_array($studentId, $paidStudentIds);
+        
+        if (!$hasPayment) {
+            // Student has no payment record - completely pending
+            $monthlyRent = getMonthlyRentForStudent($student);
+            
+            $pendingPayment = [
+                'payment_id' => 'PENDING_' . $studentId . '_' . $currentMonth,
+                'student_id' => $studentId,
+                'building_code' => $studentBuilding,
+                'month_year' => $currentMonth,
+                'amount_due' => $monthlyRent,
+                'amount_paid' => 0,
+                'late_fee' => 0,
+                'pending_balance' => $monthlyRent,
+                'payment_status' => 'pending',
+                'payment_date' => null,
+                'created_at' => date('Y-m-d H:i:s'),
+                'student_info' => $student
+            ];
+            
             // Apply status filter
             if ($selectedStatus !== 'all') {
-                if ($selectedStatus === 'partial' && $payment['payment_status'] !== 'partial') continue;
-                if ($selectedStatus === 'pending' && $payment['payment_status'] !== 'pending') continue;
-                if ($selectedStatus === 'overdue' && $payment['payment_status'] !== 'overdue') continue;
+                if ($selectedStatus === 'partial') continue; // No partial for completely unpaid
+                if ($selectedStatus === 'overdue') {
+                    // Only include if it's been more than a certain number of days
+                    $daysOverdue = getDaysOverdue(null, $currentMonth);
+                    if ($daysOverdue < 7) continue; // Consider overdue after 7 days
+                }
+                // 'pending' status matches this case
             }
-
-            $pendingPayments[] = $payment;
-            $totalPendingAmount += $balance;
+            
+            $pendingPayments[] = $pendingPayment;
+            $totalPendingAmount += $monthlyRent;
             $totalPendingPayments++;
+            
+        } else {
+            // Student has payment record - check if there's outstanding balance
+            $payment = $paymentsById[$studentId];
+            $due = floatval($payment['amount_due'] ?? 0);
+            $paid = floatval($payment['amount_paid'] ?? 0);
+            $lateFee = floatval($payment['late_fee'] ?? 0);
+            $balance = ($due + $lateFee) - $paid;
+            
+            if ($balance > 0.01) { // Use small threshold to avoid floating point issues
+                $payment['pending_balance'] = round($balance, 2);
+                $payment['student_info'] = $student;
+                
+                // Apply status filter
+                if ($selectedStatus !== 'all') {
+                    if ($selectedStatus === 'partial' && $payment['payment_status'] !== 'partial') continue;
+                    if ($selectedStatus === 'pending' && $payment['payment_status'] !== 'pending') continue;
+                    if ($selectedStatus === 'overdue' && $payment['payment_status'] !== 'overdue') continue;
+                }
+                
+                $pendingPayments[] = $payment;
+                $totalPendingAmount += $balance;
+                $totalPendingPayments++;
+            }
         }
     }
 
@@ -83,12 +175,16 @@ try {
             break;
         case 'date_desc':
             usort($pendingPayments, function ($a, $b) {
-                return strtotime($b['payment_date'] ?? '2000-01-01') <=> strtotime($a['payment_date'] ?? '2000-01-01');
+                $dateA = $a['payment_date'] ?? $a['created_at'] ?? '2000-01-01';
+                $dateB = $b['payment_date'] ?? $b['created_at'] ?? '2000-01-01';
+                return strtotime($dateB) <=> strtotime($dateA);
             });
             break;
         case 'date_asc':
             usort($pendingPayments, function ($a, $b) {
-                return strtotime($a['payment_date'] ?? '2000-01-01') <=> strtotime($b['payment_date'] ?? '2000-01-01');
+                $dateA = $a['payment_date'] ?? $a['created_at'] ?? '2000-01-01';
+                $dateB = $b['payment_date'] ?? $b['created_at'] ?? '2000-01-01';
+                return strtotime($dateA) <=> strtotime($dateB);
             });
             break;
         case 'student':
@@ -111,9 +207,16 @@ try {
         $buildingBreakdown[$building]['count']++;
         $buildingBreakdown[$building]['amount'] += $payment['pending_balance'];
     }
+
+    // Debug logging
+    error_log('Pending payments debug: Final pending count: ' . count($pendingPayments));
+    error_log('Pending payments debug: Total pending amount: ' . $totalPendingAmount);
+
 } catch (Exception $e) {
     $error = 'Error loading pending payments: ' . $e->getMessage();
     error_log('Pending payments error: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
+    
     $pendingPayments = [];
     $totalPendingAmount = 0;
     $totalPendingPayments = 0;
@@ -142,17 +245,6 @@ function getStatusBadge($status)
     ];
     return $badges[$status] ?? 'status-badge bg-gray-500 bg-opacity-20 text-gray-400';
 }
-
-function getDaysOverdue($paymentDate, $monthYear)
-{
-    if (empty($paymentDate)) return 0;
-
-    $paymentTime = strtotime($paymentDate);
-    $currentTime = time();
-    $daysDiff = floor(($currentTime - $paymentTime) / (24 * 60 * 60));
-
-    return max(0, $daysDiff);
-}
 ?>
 
 <?php include '../../includes/header.php'; ?>
@@ -172,7 +264,7 @@ function getDaysOverdue($paymentDate, $monthYear)
             <div>
                 <h1 class="text-2xl font-bold text-pg-text-primary">Pending Payments</h1>
                 <p class="text-pg-text-secondary mt-1">
-                    Track and manage outstanding payment balances
+                    Track and manage outstanding payment balances for <?php echo $currentMonth; ?>
                 </p>
             </div>
         </div>
@@ -196,6 +288,22 @@ function getDaysOverdue($paymentDate, $monthYear)
                 </svg>
                 <?php echo htmlspecialchars($error); ?>
             </div>
+        </div>
+    <?php endif; ?>
+
+    <!-- Debug Information (remove in production) -->
+    <?php if (isset($_GET['debug'])): ?>
+        <div class="bg-blue-500 bg-opacity-10 border border-blue-500 text-blue-600 px-4 py-3 rounded-lg">
+            <h4 class="font-bold mb-2">Debug Information:</h4>
+            <ul class="text-sm space-y-1">
+                <li>Total Active Students: <?php echo count($allActiveStudents ?? []); ?></li>
+                <li>Students with Current Month Payments: <?php echo count($paidStudentIds ?? []); ?></li>
+                <li>Pending Payments Found: <?php echo count($pendingPayments); ?></li>
+                <li>Total Pending Amount: ₹<?php echo number_format($totalPendingAmount); ?></li>
+                <li>Selected Building: <?php echo $selectedBuilding; ?></li>
+                <li>Current Month: <?php echo $currentMonth; ?></li>
+                <li>Selected Status Filter: <?php echo $selectedStatus; ?></li>
+            </ul>
         </div>
     <?php endif; ?>
 
@@ -332,7 +440,7 @@ function getDaysOverdue($paymentDate, $monthYear)
                             <th class="table-header">Student</th>
                             <th class="table-header">Building</th>
                             <th class="table-header">Period</th>
-                            <th class="table-header text-right">Due</th>
+                            <th class="table-header text-right">Monthly Rent</th>
                             <th class="table-header text-right">Paid</th>
                             <th class="table-header text-right">Balance</th>
                             <th class="table-header">Status</th>
@@ -345,10 +453,15 @@ function getDaysOverdue($paymentDate, $monthYear)
                             <?php
                             $student = $payment['student_info'];
                             $daysOverdue = getDaysOverdue($payment['payment_date'], $payment['month_year']);
+                            $isPendingRecord = strpos($payment['payment_id'], 'PENDING_') === 0;
                             ?>
                             <tr class="border-b border-pg-border hover:bg-pg-hover transition-colors duration-200">
                                 <td class="px-6 py-4 font-mono text-sm">
-                                    <?php echo htmlspecialchars($payment['payment_id']); ?>
+                                    <?php if ($isPendingRecord): ?>
+                                        <span class="text-status-warning font-medium">NO RECORD</span>
+                                    <?php else: ?>
+                                        <?php echo htmlspecialchars($payment['payment_id']); ?>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4">
                                     <div>
@@ -380,7 +493,7 @@ function getDaysOverdue($paymentDate, $monthYear)
                                     <div class="font-semibold text-pg-text-primary">
                                         <?php echo formatCurrency($payment['amount_due']); ?>
                                     </div>
-                                    <?php if ($payment['late_fee'] > 0): ?>
+                                    <?php if (isset($payment['late_fee']) && $payment['late_fee'] > 0): ?>
                                         <div class="text-xs text-status-danger">
                                             +<?php echo formatCurrency($payment['late_fee']); ?> late fee
                                         </div>
@@ -407,30 +520,32 @@ function getDaysOverdue($paymentDate, $monthYear)
 
                                 <td class="px-6 py-4 text-center">
                                     <div class="flex items-center justify-center space-x-1">
-                                        <a href="../payments/view.php?id=<?php echo urlencode($payment['payment_id']); ?>"
-                                            class="text-blue-400 hover:text-blue-300 transition-colors duration-200 p-1"
-                                            title="View Payment">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                            </svg>
-                                        </a>
-                                        <a href="../payments/edit.php?id=<?php echo urlencode($payment['payment_id']); ?>"
-                                            class="text-yellow-400 hover:text-yellow-300 transition-colors duration-200 p-1"
-                                            title="Edit Payment">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                            </svg>
-                                        </a>
-                                        <?php if ($student && !empty($student['phone'])): ?>
-                                            <a href="tel:<?php echo htmlspecialchars($student['phone']); ?>"
-                                                class="text-green-400 hover:text-green-300 transition-colors duration-200 p-1"
-                                                title="Call Student">
+                                        <?php if (!$isPendingRecord): ?>
+                                            <a href="../payments/view.php?id=<?php echo urlencode($payment['payment_id']); ?>"
+                                                class="text-blue-400 hover:text-blue-300 transition-colors duration-200 p-1"
+                                                title="View Payment">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                                </svg>
+                                            </a>
+                                            <a href="../payments/edit.php?id=<?php echo urlencode($payment['payment_id']); ?>"
+                                                class="text-yellow-400 hover:text-yellow-300 transition-colors duration-200 p-1"
+                                                title="Edit Payment">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                                 </svg>
                                             </a>
                                         <?php endif; ?>
+                                        
+                                        <!-- Record Payment Button -->
+                                        <a href="../payments/add.php?student_id=<?php echo urlencode($payment['student_id']); ?>&amount=<?php echo urlencode($payment['pending_balance']); ?>"
+                                            class="text-green-400 hover:text-green-300 transition-colors duration-200 p-1"
+                                            title="Record Payment">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                            </svg>
+                                        </a>
                                     </div>
                                 </td>
                             </tr>
@@ -461,7 +576,7 @@ function getDaysOverdue($paymentDate, $monthYear)
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                 </svg>
                 <div class="font-medium text-pg-text-primary">Record Payment</div>
-                <div class="text-sm text-pg-text-secondary">Update payment status</div>
+                <div class="text-sm text-pg-text-secondary">Add new payment</div>
             </a>
 
             <a href="export.php?type=pending_detailed" class="p-4 bg-pg-primary bg-opacity-50 rounded-lg hover:bg-pg-hover transition-colors duration-200 text-center">
