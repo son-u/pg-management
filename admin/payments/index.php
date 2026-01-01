@@ -297,7 +297,7 @@ function getStatusBadge($status) {
         </form>
     </div>
 
-    <!-- ✅ UPDATED: Payments Table with Student Names -->
+    
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full">
@@ -339,7 +339,7 @@ function getStatusBadge($status) {
                                 <td class="px-6 py-4 font-mono text-sm">
                                     <?php echo htmlspecialchars($payment['payment_id']); ?>
                                 </td>
-                                <!-- ✅ UPDATED: Show student name and ID with building -->
+                                
                                 <td class="px-6 py-4">
                                     <div>
                                         <div class="font-medium text-pg-text-primary">

@@ -60,16 +60,16 @@ class SupabaseClient
 
     public function select($table, $columns = '*', $filters = [])
     {
-        // Start with base URL and select parameter
+       
         $url = $this->url . "/rest/v1/{$table}?select=" . urlencode($columns);
 
-        // FIXED: Build query parameters exactly like the working manual call
+       
         foreach ($filters as $key => $value) {
-            // Use the exact same format as the working manual call
+           
             $url .= "&" . urlencode($key) . "=eq." . urlencode($value);
         }
 
-        // Debug: Log the built URL to compare with manual call
+      
         error_log("PHP Client URL: " . $url);
 
         return $this->makeRequest('GET', $url);
@@ -85,7 +85,6 @@ class SupabaseClient
     {
         $url = $this->url . "/rest/v1/{$table}";
 
-        // Build query parameters for WHERE clause
         $conditions = [];
         foreach ($filters as $key => $value) {
             $conditions[] = urlencode($key) . "=eq." . urlencode($value);
@@ -102,7 +101,7 @@ class SupabaseClient
     {
         $url = $this->url . "/rest/v1/{$table}";
 
-        // Build query parameters for WHERE clause
+       
         $conditions = [];
         foreach ($filters as $key => $value) {
             $conditions[] = urlencode($key) . "=eq." . urlencode($value);
@@ -117,7 +116,7 @@ class SupabaseClient
 
     private function makeRequest($method, $url, $data = null)
     {
-        // Enhanced debug logging
+   
         error_log("=== Supabase API Request ===");
         error_log("Method: $method");
         error_log("URL: $url");
@@ -146,7 +145,6 @@ class SupabaseClient
         $error = curl_error($ch);
         curl_close($ch);
 
-        // Enhanced debug logging
         error_log("HTTP Code: $httpCode");
         error_log("Response: $response");
         error_log("=== End API Request ===");
@@ -163,13 +161,13 @@ class SupabaseClient
     }
 }
 
-// Global database instance
+
 function db()
 {
     return Database::getInstance()->getConnection();
 }
 
-// Global Supabase instance
+
 function supabase()
 {
     return new SupabaseClient();

@@ -1,9 +1,8 @@
 <?php
 
-// Load database configuration FIRST
+
 require_once __DIR__ . '/database.php';
 
-// Then Buildings class (after database is available)
 require_once __DIR__ . '/../includes/Buildings.php';
 
 // Load environment variables
@@ -48,7 +47,7 @@ define('DB_NAME', $_ENV['DB_NAME'] ?? 'postgres');
 define('DB_USER', $_ENV['DB_USER']);
 define('DB_PASS', $_ENV['DB_PASS']);
 
-// ⭐ UPDATED Session Configuration
+
 define('SESSION_LIFETIME', $_ENV['SESSION_LIFETIME'] ?? 28800);           // 8 hours in seconds
 define('SESSION_REFRESH_TIME', $_ENV['SESSION_REFRESH_TIME'] ?? 1800);    // 30 minutes in seconds
 define('COOKIE_SECURE', $_ENV['COOKIE_SECURE'] === 'true');
@@ -65,11 +64,7 @@ define('INCLUDES_PATH', ROOT_PATH . '/includes');
 define('ADMIN_PATH', ROOT_PATH . '/admin');
 define('ASSETS_PATH', ROOT_PATH . '/assets');
 
-// ✅ REMOVED: Building Configuration (now dynamic via Buildings class)
-// Hard-coded building constants have been removed
-// Buildings are now managed via the Buildings class and database
 
-// ✅ IMPROVED: Helper functions for backward compatibility
 function getBuildingCodes()
 {
     try {
@@ -90,7 +85,6 @@ function getBuildingNames()
     }
 }
 
-// ✅ NEW: Additional building helper functions
 function getBuildingName($code)
 {
     try {
@@ -112,7 +106,7 @@ function buildingExists($code)
     }
 }
 
-// ⭐ ENHANCED Session Setup
+
 if (session_status() == PHP_SESSION_NONE) {
     // Set PHP session configuration for enhanced session management
     ini_set('session.gc_maxlifetime', SESSION_LIFETIME);
@@ -129,7 +123,7 @@ if (session_status() == PHP_SESSION_NONE) {
 
     session_start();
 
-    // ⭐ ADD SESSION ACTIVITY TRACKING
+   
     if (!isset($_SESSION['created'])) {
         $_SESSION['created'] = time();
     }
@@ -197,7 +191,6 @@ function verify_csrf_token($token)
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
-// ⭐ NEW ENHANCED SESSION MANAGEMENT FUNCTIONS
 function is_session_expired()
 {
     if (!isset($_SESSION['last_activity'])) {
@@ -225,7 +218,7 @@ function refresh_session()
 
 function extend_session()
 {
-    // ⭐ ADAPTED TO YOUR SESSION VARIABLES (admin_id instead of user_id)
+    
     if (isset($_SESSION['admin_id'])) {
         refresh_session();
 
@@ -275,7 +268,6 @@ function destroy_session()
     session_destroy();
 }
 
-// ⭐ SAFE HTML OUTPUT FUNCTION (used in your dashboard)
 function safe_html($string)
 {
     return htmlspecialchars($string ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8');

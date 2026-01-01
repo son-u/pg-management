@@ -40,7 +40,7 @@ function login($admin)
     $_SESSION['admin_role'] = $admin['role'];
     $_SESSION['login_time'] = time();
 
-    // ⭐ INITIALIZE NEW SESSION TRACKING
+    
     $_SESSION['last_activity'] = time();
     $_SESSION['created'] = time();
 }
@@ -48,15 +48,15 @@ function login($admin)
 
 function logout()
 {
-    // ⭐ USE NEW ENHANCED SESSION DESTRUCTION
+   
     destroy_session();
     redirect(route('index.php'));
 }
 
-// from gemini for session
+
 function checkSessionTimeout()
 {
-    // Use the new enhanced session management functions
+   
     if (is_session_expired()) {
         flash('error', 'Your session has expired. Please log in again.');
         destroy_session();
@@ -64,12 +64,11 @@ function checkSessionTimeout()
         return false;
     }
 
-    // THIS LINE WAS THE PROBLEM AND HAS BEEN REMOVED
-    // refresh_session(); 
+    
 
-    // Optional: Warn user when session is about to expire (last 10 minutes)
+    
     $remaining_time = get_session_remaining_time();
-    if ($remaining_time < 600 && $remaining_time > 0) { // Less than 10 minutes
+    if ($remaining_time < 600 && $remaining_time > 0) { 
         flash('warning', 'Your session will expire in ' . ceil($remaining_time / 60) . ' minutes.');
     }
 
@@ -77,13 +76,13 @@ function checkSessionTimeout()
 }
 
 
-// ⭐ ENHANCED AUTO-CHECK ON PROTECTED PAGES
+
 if (
     basename($_SERVER['SCRIPT_NAME']) !== 'index.php' &&
     basename($_SERVER['SCRIPT_NAME']) !== 'logout.php'
 ) {
     requireLogin();
 
-    // ⭐ USE ENHANCED SESSION TIMEOUT CHECK
+    
     checkSessionTimeout();
 }

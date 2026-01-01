@@ -1,9 +1,9 @@
 <?php
-// Get current building selection
+
 $selectedBuilding = $_GET['building'] ?? $_SESSION['selected_building'] ?? 'all';
 $currentRoute = $_SERVER['REQUEST_URI'];
 
-// Get buildings data using the new Buildings class
+
 try {
     $buildingCodes = Buildings::getCodes();
     $buildingNames = Buildings::getNames();

@@ -257,7 +257,7 @@ function calculateAge($dateOfBirth)
                     </div>
                 </div>
 
-                <!-- ✅ UPDATED: Academic Information (Simplified) -->
+                
                 <div class="card">
                     <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border flex items-center">
                         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -282,7 +282,7 @@ function calculateAge($dateOfBirth)
                     </div>
                 </div>
 
-                <!-- ✅ UPDATED: Accommodation Information (Removed Security Deposit) -->
+              
                 <div class="card">
                     <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border flex items-center">
                         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -313,7 +313,7 @@ function calculateAge($dateOfBirth)
                     </div>
                 </div>
 
-                <!-- ✅ UPDATED: Address & Additional Information -->
+                
                 <div class="card">
                     <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border flex items-center">
                         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

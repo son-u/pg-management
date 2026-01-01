@@ -47,7 +47,7 @@ try {
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // ✅ UPDATED: Collect and sanitize form data (removed unwanted fields)
+  
     $formData = [
         'full_name' => trim($_POST['full_name'] ?? ''),
         'email' => trim($_POST['email'] ?? ''),
@@ -55,14 +55,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'date_of_birth' => trim($_POST['date_of_birth'] ?? ''),
         'parent_phone' => trim($_POST['parent_phone'] ?? ''),
         'parent_name' => trim($_POST['parent_name'] ?? ''),
-        'college_name' => trim($_POST['college_name'] ?? ''), // ✅ KEPT
-        'course' => trim($_POST['course'] ?? ''), // ✅ KEPT
+        'college_name' => trim($_POST['college_name'] ?? ''), 
+        'course' => trim($_POST['course'] ?? ''), 
         'admission_date' => trim($_POST['admission_date'] ?? ''),
         'building_code' => trim($_POST['building_code'] ?? ''),
         'room_number' => trim($_POST['room_number'] ?? ''),
-        'monthly_rent' => floatval($_POST['monthly_rent'] ?? 5000), // ✅ KEPT
-        'address' => trim($_POST['address'] ?? ''), // ✅ UPDATED (single address field)
-        'note' => trim($_POST['note'] ?? ''), // ✅ UPDATED (replaces medical_notes)
+        'monthly_rent' => floatval($_POST['monthly_rent'] ?? 5000), 
+        'address' => trim($_POST['address'] ?? ''), 
+        'note' => trim($_POST['note'] ?? ''), 
         'status' => $_POST['status'] ?? 'active'
     ];
 
@@ -136,7 +136,7 @@ function formatDateForInput($date) {
     }
 }
 
-// ✅ UPDATED: Fetch available buildings using Buildings class
+
 $availableBuildings = [];
 try {
     $availableBuildings = Buildings::getAll();
@@ -282,7 +282,7 @@ try {
                 </div>
             </div>
 
-            <!-- ✅ UPDATED: Academic Information Section (Simplified) -->
+           
             <div>
                 <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                     Academic Information
@@ -329,7 +329,7 @@ try {
                 </div>
             </div>
 
-            <!-- ✅ UPDATED: Accommodation Information Section -->
+            
             <div>
                 <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                     Accommodation Details
@@ -390,7 +390,7 @@ try {
                 </div>
             </div>
 
-            <!-- ✅ UPDATED: Contact Information Section (Simplified) -->
+          
             <div>
                 <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                     Contact & Additional Information
@@ -437,7 +437,7 @@ try {
                     </div>
                 </div>
 
-                <!-- ✅ UPDATED: Note Field (replaces Medical Notes) -->
+               
                 <div class="mt-6">
                     <label for="note" class="block text-sm font-medium text-pg-text-primary mb-2">
                         Additional Notes (Optional)
@@ -478,7 +478,7 @@ try {
     </div>
 </div>
 
-<!-- ✅ ADDED: JavaScript for Dynamic Room Loading -->
+
 <script>
 async function loadRooms(buildingCode) {
     const roomSelect = document.getElementById('room_number');

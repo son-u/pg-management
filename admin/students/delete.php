@@ -44,18 +44,14 @@ try {
 
     $student = $studentData[0];
 
-    // ✅ CHECK FOR RELATED RECORDS - UPDATED WITH CORRECT SCHEMA
+   
     // Check for payments using correct column names
     $payments = $supabase->select('payments', 'id, payment_id, amount_paid, amount_due, payment_date, payment_type, month_year, payment_status', ['student_id' => $studentId]);
     if (!empty($payments)) {
         $relatedRecords['payments'] = $payments;
     }
 
-    // Add other related tables as needed (e.g., attendance, complaints, etc.)
-    // $attendance = $supabase->select('attendance', 'id', ['student_id' => $studentId]);
-    // if (!empty($attendance)) {
-    //     $relatedRecords['attendance'] = $attendance;
-    // }
+
 
 } catch (Exception $e) {
     $error = 'Error loading student: ' . $e->getMessage();
@@ -68,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($confirmDelete === 'yes') {
         try {
-            // ✅ PERFORM CASCADE DELETION
+            
             $supabase = supabase();
             
             // Begin transaction-like operations
@@ -155,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
 
     <?php if ($student): ?>
-        <!-- ✅ RELATED RECORDS WARNING (if any exist) - UPDATED WITH CORRECT COLUMNS -->
+        
         <?php if (!empty($relatedRecords)): ?>
             <div class="bg-yellow-500 bg-opacity-10 border border-yellow-500 text-yellow-600 px-4 py-3 rounded-lg">
                 <div class="flex items-start">
@@ -181,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
-        <!-- ✅ DETAILED PAYMENT RECORDS (if any exist) -->
+        
         <?php if (!empty($relatedRecords['payments']) && count($relatedRecords['payments']) <= 10): ?>
             <div class="card">
                 <h4 class="font-semibold text-pg-text-primary mb-3">Payment Records to be Deleted</h4>

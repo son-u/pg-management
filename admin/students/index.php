@@ -193,7 +193,7 @@ $queryParams = [
         </form>
     </div>
 
-    <!-- ✅ UPDATED: Students Table (Removed Email Column) -->
+  
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full">
@@ -213,7 +213,7 @@ $queryParams = [
                 <tbody>
                     <?php if (empty($students)): ?>
                         <tr>
-                            <!-- ✅ UPDATED: colspan from 9 to 8 (removed email column) -->
+                          
                             <td colspan="8" class="px-6 py-12 text-center">
                                 <div class="flex flex-col items-center">
                                     <svg class="w-12 h-12 text-pg-text-secondary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,7 +257,7 @@ $queryParams = [
                                     </div>
                                 </td>
                                 <td class="hidden sm:table-cell px-6 py-4"><?php echo htmlspecialchars($student['phone'] ?? '-'); ?></td>
-                                <!-- ❌ REMOVED: Email column -->
+                             
                                 <td class="hidden lg:table-cell px-6 py-4">
                                     <div class="max-w-32 truncate" title="<?php echo htmlspecialchars($student['college_name'] ?? ''); ?>">
                                         <?php echo htmlspecialchars($student['college_name'] ?? '-'); ?>

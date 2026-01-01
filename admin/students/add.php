@@ -84,15 +84,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'date_of_birth' => $formData['date_of_birth'] ?: null,
                     'parent_phone' => $formData['parent_phone'] ?: null,
                     'parent_name' => $formData['parent_name'] ?: null,
-                    'college_name' => $formData['college_name'] ?: null, // ✅ ADDED
+                    'college_name' => $formData['college_name'] ?: null, 
                     'course' => $formData['course'] ?: null,
                     'building_code' => $formData['building_code'],
                     'room_number' => $formData['room_number'] ?: null,
                     'monthly_rent' => $formData['monthly_rent'],
                     'address' => $formData['address'] ?: null,
-                    'note' => $formData['note'] ?: null, // ✅ ADDED (replaces medical_notes)
+                    'note' => $formData['note'] ?: null, 
                     'status' => $formData['status'],
-                    'admission_date' => date('Y-m-d'), // ✅ ADDED
+                    'admission_date' => date('Y-m-d'), 
                     'created_at' => date('c'),
                     'updated_at' => date('c')
                 ];
@@ -137,7 +137,7 @@ try {
     $suggestedStudentId = 'PG-' . date('Y') . '-001';
 }
 
-// ✅ UPDATED: Fetch available buildings using Buildings class
+
 $availableBuildings = [];
 try {
     $availableBuildings = Buildings::getAll();
@@ -274,14 +274,14 @@ try {
                 </div>
             </div>
 
-            <!-- ✅ UPDATED: Academic Information Section (Simplified) -->
+            
             <div>
                 <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                     Academic Information
                 </h3>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- College Name -->
+                    
                     <div>
                         <label for="college_name" class="block text-sm font-medium text-pg-text-primary mb-2">
                             College/Institution Name
@@ -309,7 +309,7 @@ try {
                 </div>
             </div>
 
-            <!-- ✅ UPDATED: Accommodation Information Section -->
+            
             <div>
                 <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                     Accommodation Details
@@ -365,7 +365,7 @@ try {
                 </div>
             </div>
 
-            <!-- ✅ UPDATED: Contact Information Section -->
+           
             <div>
                 <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                     Contact & Additional Information
@@ -412,7 +412,7 @@ try {
                     </div>
                 </div>
 
-                <!-- ✅ UPDATED: Short Note (replaces Medical Notes) -->
+               
                 <div class="mt-6">
                     <label for="note" class="block text-sm font-medium text-pg-text-primary mb-2">
                         Additional Notes (Optional)
@@ -447,7 +447,7 @@ try {
     </div>
 </div>
 
-<!-- ✅ ADDED: JavaScript for Dynamic Room Loading -->
+
 <script>
 async function loadRooms(buildingCode) {
     const roomSelect = document.getElementById('room_number');

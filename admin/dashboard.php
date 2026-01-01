@@ -54,7 +54,7 @@ try {
     $students = $supabase->select('students', 'id,student_id,full_name,building_code,created_at', $studentsFilter);
     $totalStudents = count($students);
 
-    // ✅ FIXED: Get recent students with building filter
+   
     $studentsFilterForRecent = ['status' => 'active'];
     if ($selectedBuilding !== 'all') {
         $studentsFilterForRecent['building_code'] = $selectedBuilding;
@@ -75,7 +75,7 @@ try {
     $payments = $supabase->select('payments', 'amount_paid,student_id,created_at', $paymentsFilter);
     $totalRevenue = array_sum(array_column($payments, 'amount_paid'));
 
-    // ✅ FIXED: Get recent payments with building filter and student names
+   
     $recentPayments = [];
     try {
         $paymentsFilterForRecent = [];
@@ -134,7 +134,7 @@ try {
     });
     $pendingPayments = count($pendingStudents);
 
-    // ✅ UPDATED: Get accurate building-wise data with better performance calculation
+    //Get accurate building-wise data with better performance calculation
     $buildingStats = [];
     if (!empty($buildingCodes)) {
         foreach ($buildingCodes as $code) {
@@ -169,7 +169,7 @@ try {
 
             $occupancyRate = $buildingCapacity > 0 ? round(($buildingOccupancy / $buildingCapacity) * 100, 1) : 0;
 
-            // ✅ ENHANCED: Better performance calculation
+            
             $performance = 'needs_attention'; // Default
 
             if ($revenue > 0 && $occupancyRate > 70) {
@@ -198,7 +198,7 @@ try {
     $systemStatus = 'error';
 }
 
-// ✅ UPDATED: Calculate accurate occupancy rate
+
 $occupancyRate = $totalCapacity > 0 ? round(($totalOccupied / $totalCapacity) * 100, 1) : 0;
 ?>
 
@@ -248,7 +248,7 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalOccupied / $totalCapacity) * 
         </div>
     </div>
 
-    <!-- ✅ UPDATED: Show API Status Alert only on main dashboard (all buildings view) -->
+   
     <?php if ($selectedBuilding === 'all'): ?>
         <div class="bg-status-success bg-opacity-10 border border-status-success text-status-success px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm animate-slide-up">
             <div class="flex items-center">
@@ -366,7 +366,7 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalOccupied / $totalCapacity) * 
         </div>
     </div>
 
-    <!-- ✅ UPDATED: Building-wise Performance with Enhanced Logic -->
+  
     <?php if ($selectedBuilding === 'all' && !empty($buildingStats)): ?>
         <div class="card animate-slide-up" style="animation-delay: 0.5s;">
             <div class="flex items-center justify-between mb-4 sm:mb-6">
@@ -385,7 +385,7 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalOccupied / $totalCapacity) * 
                             </div>
                             <div class="flex items-center ml-2">
                                 <span class="text-xs bg-pg-accent bg-opacity-20 text-pg-accent px-2 py-1 rounded mr-2"><?php echo htmlspecialchars($code); ?></span>
-                                <!-- ✅ UPDATED: Enhanced status indicator -->
+                              
                                 <div class="w-2 h-2 bg-<?php
                                                         echo $stats['performance'] === 'excellent' ? 'green-500' : ($stats['performance'] === 'good' ? 'status-success' : ($stats['performance'] === 'fair' ? 'status-warning' : 'status-danger'));
                                                         ?> rounded-full"></div>
@@ -416,7 +416,7 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalOccupied / $totalCapacity) * 
                                     <div class="bg-pg-accent h-2 rounded-full transition-all duration-1000"
                                         style="width: <?php echo min($stats['occupancy'], 100); ?>%"></div>
                                 </div>
-                                <!-- ✅ UPDATED: Enhanced performance labels -->
+                             
                                 <div class="flex justify-between text-xs text-pg-text-secondary">
                                     <span>Performance:
                                         <?php
@@ -451,7 +451,7 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalOccupied / $totalCapacity) * 
 
     <!-- Recent Activity Section -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <!-- ✅ FIXED: Recent Students (Building-Filtered) -->
+       
         <div class="card animate-slide-up" style="animation-delay: 0.6s;">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-base sm:text-lg font-semibold text-pg-text-primary">
@@ -494,7 +494,7 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalOccupied / $totalCapacity) * 
             <?php endif; ?>
         </div>
 
-        <!-- ✅ FIXED: Recent Payments (Building-Filtered) with Correct Status -->
+        
         <div class="card animate-slide-up" style="animation-delay: 0.7s;">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-base sm:text-lg font-semibold text-pg-text-primary">
@@ -529,7 +529,7 @@ $occupancyRate = $totalCapacity > 0 ? round(($totalOccupied / $totalCapacity) * 
                             </div>
 
                             <?php
-                            // ✅ FIXED: Dynamic status display
+                           
                             $statusClasses = [
                                 'paid' => 'bg-status-success bg-opacity-20 text-status-success',
                                 'partial' => 'bg-status-warning bg-opacity-20 text-status-warning',

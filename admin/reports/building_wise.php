@@ -41,7 +41,7 @@ try {
         return ($payment['building_code'] ?? '') === $selectedBuilding;
     });
 
-    // ✅ NEW: Get actual room data for accurate capacity and occupancy
+    
     $buildingRooms = $supabase->select('rooms', 'capacity,current_occupancy,status', [
         'building_code' => $selectedBuilding
     ]);
@@ -75,7 +75,7 @@ try {
         'current_occupancy' => $totalCurrentOccupancy
     ];
 
-    // ✅ UPDATED: Calculate accurate occupancy rate from actual room data
+   
     $metrics['occupancy_rate'] = $totalCapacity > 0 ? 
         round(($totalCurrentOccupancy / $totalCapacity) * 100, 1) : 0;
 
@@ -128,7 +128,7 @@ try {
     // Sort monthly data by date (newest first)
     krsort($monthlyBreakdown);
 
-    // ✅ NEW: Get recent payments with student names
+    
     $recentPayments = array_slice(array_reverse($buildingPayments), 0, 10);
     $recentPaymentsWithNames = [];
 
@@ -283,7 +283,7 @@ function getStatusBadge($status)
             </p>
         </div>
 
-        <!-- ✅ UPDATED: Accurate Occupancy Rate -->
+       
         <div class="card text-center">
             <div class="text-3xl font-bold <?php echo $metrics['occupancy_rate'] >= 80 ? 'text-green-400' : ($metrics['occupancy_rate'] >= 60 ? 'text-yellow-400' : 'text-status-danger'); ?> mb-2">
                 <?php echo $metrics['occupancy_rate']; ?>%
@@ -317,14 +317,14 @@ function getStatusBadge($status)
 
     <!-- Financial Summary -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- ✅ ENHANCED: Payment Status Analysis -->
+        
         <div class="card">
             <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                 Payment Status Analysis
             </h3>
 
             <?php
-            // ✅ ENHANCED: Calculate payment status based on actual amounts
+            
             $enhancedStatusBreakdown = [
                 'fully_paid' => ['count' => 0, 'label' => 'Fully Paid', 'color' => 'status-success'],
                 'partial_paid' => ['count' => 0, 'label' => 'Partial Payment', 'color' => 'status-info'], 
@@ -618,7 +618,7 @@ function getStatusBadge($status)
             </div>
         </div>
 
-        <!-- ✅ UPDATED: Recent Payments with Student Names -->
+        
         <div class="card">
             <h3 class="text-lg font-semibold text-pg-text-primary mb-4 pb-2 border-b border-pg-border">
                 Recent Payments
@@ -631,7 +631,7 @@ function getStatusBadge($status)
                     <?php foreach ($recentPaymentsWithNames as $payment): ?>
                         <div class="flex items-center justify-between p-3 bg-pg-primary bg-opacity-50 rounded-lg">
                             <div>
-                                <!-- ✅ UPDATED: Show student name instead of student_id -->
+                               
                                 <div class="font-medium text-pg-text-primary">
                                     <?php echo htmlspecialchars($payment['student_name']); ?>
                                 </div>

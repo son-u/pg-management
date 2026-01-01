@@ -16,7 +16,7 @@ foreach ($buildings as $building) {
     $buildingNames[$building['building_code']] = $building['building_name'];
 }
 
-// ✅ FUNCTION TO CALCULATE EFFECTIVE STATUS BASED ON OCCUPANCY
+
 function getEffectiveStatus($room) {
     $storedStatus = $room['status'] ?? 'available';
     $currentOccupancy = intval($room['current_occupancy']);
@@ -338,7 +338,7 @@ usort($rooms, function ($a, $b) {
                     <tbody>
                         <?php foreach ($rooms as $room): ?>
                             <?php 
-                            // ✅ CALCULATE EFFECTIVE STATUS BASED ON OCCUPANCY
+                            
                             $effectiveStatus = getEffectiveStatus($room);
                             $currentOccupancy = intval($room['current_occupancy']);
                             $capacity = intval($room['capacity']);
@@ -377,7 +377,7 @@ usort($rooms, function ($a, $b) {
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <?php
-                                    // ✅ UPDATED STATUS COLORS AND LOGIC
+                                   
                                     $statusColors = [
                                         'available' => 'bg-green-500 bg-opacity-20 text-green-400',
                                         'occupied' => 'bg-blue-500 bg-opacity-20 text-blue-400', 
@@ -387,7 +387,7 @@ usort($rooms, function ($a, $b) {
                                     ];
                                     $statusClass = $statusColors[$effectiveStatus] ?? 'bg-gray-500 bg-opacity-20 text-gray-400';
                                     
-                                    // ✅ STATUS DISPLAY NAMES
+                                   
                                     $statusNames = [
                                         'available' => 'Available',
                                         'occupied' => 'Occupied',

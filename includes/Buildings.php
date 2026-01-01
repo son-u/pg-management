@@ -221,9 +221,6 @@ class Buildings {
         }
     }
 
-    /**
-     * ✅ REMOVED: getFallbackBuildings() method
-     * The system now relies entirely on the database
-     */
+   
 }
 ?>
